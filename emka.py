@@ -87,8 +87,8 @@ import logging
 
 
 # 1. Define your folders
-# base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel")
-base_dir = Path(r'F:\temp\4')
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel")
+# base_dir = Path(r'F:\temp\4')
 output_file = base_dir / "Master_Telemetry_Dataset.csv"
 log_file = base_dir / "extraction_log.txt"
 
@@ -191,4 +191,72 @@ else:
     logging.error("No data extracted. Please verify file paths and data structure.")
 
 # %%
+
+all_data[1].columns
+    # Out[96]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=208)
+
+all_data[100].columns
+    # Out[97]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=208)
+
+all_data[1000].columns
+    # Out[98]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=209)
+
+all_data[-1].columns
+    # Out[99]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=208)
+
+
+# %%
+
+# Create a set of all unique column structures in your list
+unique_col_sets = set(tuple(df.columns) for df in all_data)
+
+print(f"Found {len(unique_col_sets)} completely different column structures out of {len(all_data)} files.\n")
+
+# Print them out to see the differences
+for i, cols in enumerate(unique_col_sets):
+    print(f"Structure {i+1} (Length: {len(cols)}):")
+    print(cols)
+    print("-" * 40)
+
+
+    # Found 6 completely different column structures out of 1206 files.
+    
+    # Structure 1 (Length: 15):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 2 (Length: 7):
+    # ('cpu-date', 'cpu-time', 'period-time', 'step-index', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 3 (Length: 8):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 4 (Length: 16):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Abweichung in% HR vs HR', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 5 (Length: 16):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', nan, 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 6 (Length: 14):
+    # ('cpu-date', 'cpu-time', 'period-time', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+
+
+# %%
+
 
