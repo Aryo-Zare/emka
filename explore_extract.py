@@ -1,4 +1,36 @@
 
+# %%
+
+file_path = r'F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC09\EMKA\Housing\zc09_0a11_rx_front-housing_2020_06_16.x00.xlsb'
+df_test = pd.read_excel(file_path)
+
+# for opening '.xlsb' files, this is needed to be installed.
+# ImportError: `Import pyxlsb` failed.  Use pip or conda to install the pyxlsb package.
+
+df_test.shape
+    # Out[20]: (249, 20)
+
+df_test.head()
+    # Out[21]: 
+    #                 Unnamed: 0           Unnamed: 1  ... Unnamed: 18 Unnamed: 19
+    # 0  ecgAUTO analysis report                  NaN  ...         NaN         NaN
+    # 1                      NaN                  NaN  ...         NaN         NaN
+    # 2                        0  main-header section  ...         NaN         NaN
+    # 3                      NaN                  NaN  ...         NaN         NaN
+    # 4                      NaN                  NaN  ...         NaN         NaN
+    
+    # [5 rows x 20 columns]
+
+# %%
+
+df_test[0] == 'cpu-date'
+    # KeyError: 0
+
+# %%
+
+step_matches = df_test[df_test[0].astype(str).str.contains('steps section', case=False, na=False)].index
+
+# %%
 
 df_raw_0.shape
     # Out[17]: (249, 20)

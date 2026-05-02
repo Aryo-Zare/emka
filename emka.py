@@ -1,13 +1,14 @@
 
 # pyxlsb : should be instaled in the enviornment to be able to read '.xlsb' files.
 
-# %%
+# %% copy excel files.
+
+# only copy the excel files to a separate folder.
 
 import shutil
 from pathlib import Path
 
-# %%
-
+# %%%'
 
 # 1. Define your base directories
 source_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data")
@@ -40,50 +41,22 @@ for file_path in source_dir.rglob('*'):
 
 print(f"\nSuccess! Copied {count} Excel files to {dest_dir}")
 
-# %%
+# %%%'
 
 # Starting file copy process...
 # copied in 1s.
 # Success! Copied 1452 Excel files to F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel
 
-# %%
 
-file_path = r'F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC09\EMKA\Housing\zc09_0a11_rx_front-housing_2020_06_16.x00.xlsb'
-df_test = pd.read_excel(file_path)
+# %% extract
 
-# for opening '.xlsb' files, this is needed to be installed.
-# ImportError: `Import pyxlsb` failed.  Use pip or conda to install the pyxlsb package.
-
-df_test.shape
-    # Out[20]: (249, 20)
-
-df_test.head()
-    # Out[21]: 
-    #                 Unnamed: 0           Unnamed: 1  ... Unnamed: 18 Unnamed: 19
-    # 0  ecgAUTO analysis report                  NaN  ...         NaN         NaN
-    # 1                      NaN                  NaN  ...         NaN         NaN
-    # 2                        0  main-header section  ...         NaN         NaN
-    # 3                      NaN                  NaN  ...         NaN         NaN
-    # 4                      NaN                  NaN  ...         NaN         NaN
-    
-    # [5 rows x 20 columns]
-
-# %%
-
-df_test[0] == 'cpu-date'
-    # KeyError: 0
-
-# %%
-
-step_matches = df_test[df_test[0].astype(str).str.contains('steps section', case=False, na=False)].index
-
-# %%
+# extract the data-segment from the excel files.
 
 import pandas as pd
 from pathlib import Path
 import logging
 
-# %%
+# %%%'
 
 
 # 1. Define your folders
@@ -96,6 +69,7 @@ log_file = base_dir / "extraction_log.txt"
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True, # otherwise, it will save the log to the first file-locatio it was given to in this Python section ( python kernel restart ).
     handlers=[
         logging.FileHandler(log_file, mode='w', encoding='utf-8'), # Saves to file (overwrites old log)
         logging.StreamHandler() # Prints to console
@@ -131,22 +105,54 @@ for file_path in base_dir.rglob('*'):
                     col_matches = mask_cpu.loc[header_idx]
                     cpu_date_col_idx = col_matches[col_matches].index[0]
                     
-                    # STEP C: Find the first EMPTY ROW in the specific 'cpu-date' column
-                    df_below_header = df_raw.iloc[header_idx + 1:]
-                    is_empty_row = pd.isna(df_below_header[cpu_date_col_idx]) | (df_below_header[cpu_date_col_idx].astype(str).str.strip() == '')
-                    empty_indices = df_below_header[is_empty_row].index
+                    #==================================================================
+                    #---- STEP C: 
+                    # Combine Units, Deduplicate, and Find the End
+                    
+                    # 1. Combine Name and Unit for the column headers (e.g., "HR_aver (bpm)")
+                    col_names = df_raw.iloc[header_idx].fillna('').astype(str).str.strip()
+                    col_units = df_raw.iloc[header_idx + 1].fillna('').astype(str).str.strip()
+                    
+                    new_columns = []
+                    for name, unit in zip(col_names, col_units):
+                        if unit and unit.lower() != 'nan':
+                            new_columns.append(f"{name}_({unit})")
+                        else:
+                            new_columns.append(name)
+
+                    # 2. Deduplicate the column names (turns duplicate "HR_aver" into "HR_aver_1")
+                    seen_cols = {}
+                    deduped_columns = []
+                    for col in new_columns:
+                        if col in seen_cols:
+                            seen_cols[col] += 1
+                            deduped_columns.append(f"{col}_{seen_cols[col]}")
+                        else:
+                            seen_cols[col] = 0
+                            deduped_columns.append(col)
+                            
+                    # 3. Find the first EMPTY ROW starting AFTER the units row (header_idx + 2)
+                    df_below_units = df_raw.iloc[header_idx + 2:]
+                    is_empty_row = pd.isna(df_below_units[cpu_date_col_idx]) | (df_below_units[cpu_date_col_idx].astype(str).str.strip() == '')
+                    empty_indices = df_below_units[is_empty_row].index
                     
                     if not empty_indices.empty:
-                        end_idx = empty_indices[1]  # 2nd empty row.  1st empty row is right after 'cpu-time' ( just for organization ).
+                        end_idx = empty_indices[0] # Back to 0! Because we started searching below the unit row.
                     else:
                         end_idx = len(df_raw) 
                         
-                    # Extract the clean chunk
-                    df_chunk = df_raw.iloc[header_idx + 2 : end_idx].copy() # + 2 : so that the 'units' (mmHg , ...) row would not be selected.
-                    df_chunk.columns = df_raw.iloc[header_idx]  # this fetches the header from the original file, not the chunked one.
+                    # 4. Extract the clean chunk
+                    df_chunk = df_raw.iloc[header_idx + 2 : end_idx].copy()
+                    
+                    # Apply the deduplicated, unit-inclusive column names
+                    df_chunk.columns = deduped_columns 
+                    
+                    # Clean up: Drop completely empty columns
                     df_chunk.dropna(axis=1, how='all', inplace=True)
                     
-                    # Add Metadata
+                    
+                    #==================================================================
+                    #---- Metadata
                     df_chunk['Source_File'] = file_path.name
                     df_chunk['directory'] = str(file_path.parent)
                     
@@ -190,7 +196,143 @@ if all_data:
 else:
     logging.error("No data extracted. Please verify file paths and data structure.")
 
-# %%
+# %%% excel
+
+# also save to excel.
+
+output_file = base_dir / "Master_Telemetry_Dataset.xlsx"
+final_dataset.to_excel(output_file, index=False)
+
+
+final_dataset.shape
+    # Out[11]: (66049, 18)
+
+# %% log stats
+
+# explore the save log-file & extract useful info !
+
+import re
+from pathlib import Path
+
+# %%'
+
+# 1. Point this to your log file
+log_file = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\extraction_log__.txt")
+
+# Counters for our statistics
+stats = {
+    'total_tested': 0,
+    'success': 0,
+    'skip_no_steps': 0,
+    'skip_no_cpu_date': 0,
+    'errors': 0,
+    'total_rows': 0
+}
+
+# Lists to hold the names of problematic files
+files_with_errors = []
+files_missing_cpu = []
+
+print("Analyzing log file...\n" + "-"*40)
+
+# 2. Read the log file line by line
+try:
+    with open(log_file, 'r', encoding='utf-8') as file:
+        for line in file:
+            
+            # Count Successes and extract row counts
+            if "SUCCESS:" in line:
+                stats['success'] += 1
+                stats['total_tested'] += 1
+                
+                # Use regex to find the number between "Extracted" and "rows"
+                match = re.search(r"Extracted (\d+) rows", line)
+                if match:
+                    stats['total_rows'] += int(match.group(1))
+                    
+            # Count "No steps section" warnings
+            elif "No 'steps section' found" in line:
+                stats['skip_no_steps'] += 1
+                stats['total_tested'] += 1
+                
+            # Count "No cpu-date" warnings and save the filename
+            elif "no 'cpu-date' below it" in line:
+                stats['skip_no_cpu_date'] += 1
+                stats['total_tested'] += 1
+                
+                # Extract filename using regex
+                file_match = re.search(r"SKIPPED (.*?):", line)
+                if file_match:
+                    files_missing_cpu.append(file_match.group(1))
+                    
+            # Count real Errors and save the filename
+            elif "ERROR processing" in line:
+                stats['errors'] += 1
+                stats['total_tested'] += 1
+                
+                file_match = re.search(r"ERROR processing (.*?):", line)
+                if file_match:
+                    files_with_errors.append(file_match.group(1))
+
+    # 3. Print the Final Report
+    print(f"OVERALL FILE STATISTICS")
+    print(f"Total Files Processed : {stats['total_tested']}")
+    print(f"  - Successfully Merged : {stats['success']} ({round((stats['success']/stats['total_tested'])*100, 1)}%)")
+    print(f"  - Skipped (No steps)  : {stats['skip_no_steps']}")
+    print(f"  - Skipped (No cpu)    : {stats['skip_no_cpu_date']}")
+    print(f"  - Hard Errors         : {stats['errors']}")
+    print("-" * 40)
+    
+    print(f"DATA VOLUME STATISTICS")
+    print(f"Total Rows Extracted  : {stats['total_rows']}")
+    if stats['success'] > 0:
+        print(f"Average Rows per File : {round(stats['total_rows'] / stats['success'], 1)}")
+    print("-" * 40)
+    
+    if stats['errors'] > 0:
+        print(f"\nFiles that threw Hard Errors (Requires manual review):")
+        for f in files_with_errors:
+            print(f" - {f}")
+
+except FileNotFoundError:
+    print(f"Could not find the log file at: {log_file}")
+
+# %%% out
+
+# Analyzing log file...
+# ----------------------------------------
+# OVERALL FILE STATISTICS
+# Total Files Processed : 1452
+#   - Successfully Merged : 1206 (83.1%)
+#   - Skipped (No steps)  : 234
+#   - Skipped (No cpu)    : 0
+#   - Hard Errors         : 12
+# ----------------------------------------
+# DATA VOLUME STATISTICS
+# Total Rows Extracted  : 66049
+# Average Rows per File : 54.8
+# ----------------------------------------
+
+# Files that threw Hard Errors (Requires manual review):
+#  - ~$zc34_0b3f_2021_march_16_01.x00.xlsb
+#  - zc33_0b3e_2021_march_17_01.x00.xlsb
+#  - zc32_0a65_2021_march_16_01.x00.xlsb
+#  - ~$zc32_0a65_2021_march_16_01.x00.xlsb
+#  - ~$zc31_0ac6_2021_march_09_01.x00.xlsb
+#  - ~$zc30_0a69_rx_back-housing_2021_02_04-2.x00.xlsb
+#  - ~$zc28_0ac7_rx_front-housing_2021_01_19.x00.xlsb
+#  - ~$zc28_0ac7_rx_front-housing_2021_01_22.x00.xlsb
+#  - ~$zc26_0ae4_rx_front-housing_2020_11_16.x00.xlsb
+#  - ~$zc17_0a66_rx_front-housing_2020_09_01.x00.xlsb
+#  - ~$zc11_0a64_rx_of_2020_07_18.x01.xlsb
+#  - ~$zc07_0a12_rx_front-housing_2020_06_12.x00.xlsb
+
+# %% explore original column names
+
+# test
+# this is from the the older version of the extract-cell :
+    # then, the column names & units were not merged
+    # duplicate column names were also not re-named.
 
 all_data[1].columns
     # Out[96]: 
@@ -221,7 +363,7 @@ all_data[-1].columns
     #       dtype='object', name=208)
 
 
-# %%
+# %%% stat
 
 # Create a set of all unique column structures in your list
 unique_col_sets = set(tuple(df.columns) for df in all_data)
@@ -257,6 +399,43 @@ for i, cols in enumerate(unique_col_sets):
     # ----------------------------------------
 
 
-# %%
+# %%% pickle
+
+# dump the list of all the extracted data ( output of the loop ).
+
+import pickle
+from pathlib import Path
+
+# Assuming base_dir is still defined from your previous script. 
+# If not, just redefine it: base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel")
+backup_file = base_dir / "all_data_raw_backup.pkl"
+
+print("Saving binary backup...")
+
+# Open the file in 'wb' (Write Binary) mode
+with open(backup_file, 'wb') as file:
+    pickle.dump(all_data, file)
+
+print(f"Success! Backed up exactly as it is in memory to:\n{backup_file}")
+
+
+    # Saving binary backup...
+    # Success! Backed up exactly as it is in memory to:
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\all_data_raw_backup.pkl
+
+# %%%% load pickle
+
+import pickle
+from pathlib import Path
+
+backup_file = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel\all_data_raw_backup.pkl")
+
+# Open the file in 'rb' (Read Binary) mode
+with open(backup_file, 'rb') as file:
+    all_data = pickle.load(file)
+
+print(f"Loaded {len(all_data)} dataframes from backup!")
+
+# %%'
 
 
