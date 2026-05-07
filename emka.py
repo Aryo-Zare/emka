@@ -60,7 +60,7 @@ import logging
 
 
 # 1. Define your folders
-base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel")
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
 # base_dir = Path(r'F:\temp\4')
 output_file = base_dir / "Master_Telemetry_Dataset.csv"
 log_file = base_dir / "extraction_log.txt"
@@ -81,7 +81,8 @@ logging.info("Starting robust omni-column data extraction...")
 
 # 3. Process the files
 for file_path in base_dir.rglob('*'):
-    if file_path.suffix.lower() in ['.xls', '.xlsx', '.xlsb']:
+    # "and not ..." : to avoid it trying to open hidden Excel lock files ( prefix : ~$ ).
+    if file_path.suffix.lower() in ['.xls', '.xlsx', '.xlsb'] and not file_path.name.startswith('~$'):
         try:
             engine = 'pyxlsb' if file_path.suffix.lower() == '.xlsb' else 'openpyxl'
             df_raw = pd.read_excel(file_path, header=None, engine=engine)
@@ -196,16 +197,25 @@ if all_data:
 else:
     logging.error("No data extracted. Please verify file paths and data structure.")
 
-# %%% excel
+# %%% excel , pickle
 
 # also save to excel.
 
 output_file = base_dir / "Master_Telemetry_Dataset.xlsx"
 final_dataset.to_excel(output_file, index=False)
 
+output_file = base_dir / "Master_Telemetry_Dataset.pkl"
+final_dataset.to_pickle(output_file)
+
 
 final_dataset.shape
     # Out[11]: (66049, 18)
+    
+# %%
+    
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+source_file = base_dir / "Master_Telemetry_Dataset.pkl"
+df_master = pd.read_pickle(source_file)
 
 # %% log stats
 
@@ -214,7 +224,7 @@ final_dataset.shape
 import re
 from pathlib import Path
 
-# %%'
+# %%%'
 
 # 1. Point this to your log file
 log_file = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\extraction_log__.txt")
@@ -327,115 +337,657 @@ except FileNotFoundError:
 #  - ~$zc11_0a64_rx_of_2020_07_18.x01.xlsb
 #  - ~$zc07_0a12_rx_front-housing_2020_06_12.x00.xlsb
 
-# %% explore original column names
+# %% columns
 
-# test
-# this is from the the older version of the extract-cell :
-    # then, the column names & units were not merged
-    # duplicate column names were also not re-named.
+list(df_master.columns)
+    # Out[14]: 
+    # ['cpu-date',
+    #  'cpu-time',
+    #  'period-time',
+    #  'mark-label',
+    #  'step-index',
+    #  'BB__aver_(ms)',
+    #  'HR__aver_(bpm)',
+    #  'DBP__aver_(mmHg)',
+    #  'SBP__aver_(mmHg)',
+    #  'MBP__aver_(mmHg)',
+    #  'aver__aver_(°C)',
+    #  'aver__aver_(%)',
+    #  'HR__aver_(bpm)_1',
+    #  'Source_File',
+    #  'directory',
+    #  'aver__aver_(g)',
+    #  '_2',
+    #  'Abweichung in% HR vs HR']
 
-all_data[1].columns
-    # Out[96]: 
-    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
-    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
-    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
-    #       dtype='object', name=208)
+# %% suspicious_columns
 
-all_data[100].columns
-    # Out[97]: 
-    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
-    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
-    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
-    #       dtype='object', name=208)
-
-all_data[1000].columns
-    # Out[98]: 
-    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
-    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
-    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
-    #       dtype='object', name=209)
-
-all_data[-1].columns
-    # Out[99]: 
-    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
-    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
-    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
-    #       dtype='object', name=208)
+# import pandas as pd
+# from pathlib import Path
 
 
-# %%% stat
+# List the suspicious columns you want to investigate
+# (Make sure these exactly match the column names in your CSV)
+suspicious_columns = ['aver__aver_(g)', '_2', 'Abweichung in% HR vs HR']
 
-# Create a set of all unique column structures in your list
-unique_col_sets = set(tuple(df.columns) for df in all_data)
+print("Hunting for data in suspicious columns...\n")
 
-print(f"Found {len(unique_col_sets)} completely different column structures out of {len(all_data)} files.\n")
+for col in suspicious_columns:
+    if col in df_master.columns:
+        # Filter for rows where the cell is NOT NaN AND NOT just an empty space
+        mask_has_data = df_master[col].notna() & (df_master[col].astype(str).str.strip() != '')
+        dirty_rows = df_master[mask_has_data]
+        
+        print(f"--- Column: '{col}' ---")
+        print(f"Found {len(dirty_rows)} rows with actual data.")
+        
+        if len(dirty_rows) > 0:
+            # Show the first 10 occurrences so you can see what the data actually is
+            # We display the Source_File and directory so you know exactly where it came from
+            preview = dirty_rows[['directory', 'Source_File', col]].head(10)
+            print(preview.to_string(index=False))
+        print("\n" + "="*50 + "\n")
+    else:
+        print(f"Column '{col}' not found in the dataset.\n")
 
-# Print them out to see the differences
-for i, cols in enumerate(unique_col_sets):
-    print(f"Structure {i+1} (Length: {len(cols)}):")
-    print(cols)
-    print("-" * 40)
+# %%% out
 
-
-    # Found 6 completely different column structures out of 1206 files.
+    # Hunting for data in suspicious columns...
     
-    # Structure 1 (Length: 15):
-    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory')
-    # ----------------------------------------
-    # Structure 2 (Length: 7):
-    # ('cpu-date', 'cpu-time', 'period-time', 'step-index', 'HR__aver', 'Source_File', 'directory')
-    # ----------------------------------------
-    # Structure 3 (Length: 8):
-    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'HR__aver', 'Source_File', 'directory')
-    # ----------------------------------------
-    # Structure 4 (Length: 16):
-    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Abweichung in% HR vs HR', 'Source_File', 'directory')
-    # ----------------------------------------
-    # Structure 5 (Length: 16):
-    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', nan, 'Source_File', 'directory')
-    # ----------------------------------------
-    # Structure 6 (Length: 14):
-    # ('cpu-date', 'cpu-time', 'period-time', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory')
-    # ----------------------------------------
+    # --- Column: 'aver__aver_(g)' ---
+    # Found 17376 rows with actual data.
+    #                                                             directory                         Source_File aver__aver_(g)
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb              0
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb              0
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb              0
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb          0.003
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb          0.009
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb              0
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb              0
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb          0.003
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb          0.004
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\OP zc67_1a2c_rx_or_2023_10_23.x00.xlsb          0.003
+    
+    # ==================================================
+    
+    # --- Column: '_2' ---
+    # Found 222 rows with actual data.
+    #                                                             directory                         Source_File                      _2
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb Abweichung in% HR vs HR
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb              338.577193
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb              288.565303
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb               262.37991
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb                328.1783
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb               319.52339
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb              244.484411
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb              281.566975
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb              240.980898
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC35\EMKA\OR zc35_0b72_2021_april_13_01.x01.xlsb              240.213638
+    
+    # ==================================================
+    
+    # --- Column: 'Abweichung in% HR vs HR' ---
+    # Found 161 rows with actual data.
+    #                                                                               directory                           Source_File Abweichung in% HR vs HR
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb               26.460404
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                19.99773
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb               20.525496
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                5.273673
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                46.58261
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb               19.032456
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                1.357057
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                6.625007
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                 6.18918
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC22\EMKA\Surgery\Implantation 0ac7_0ac7_2020_october_20_01.x01.xlsb                4.036679
+    
+    # ==================================================
+
+# %% Metadata
+
+# 2. Define a function to parse the path safely
+def extract_path_info(path_string):
+    # Convert the raw string into a Path object
+    p = Path(str(path_string))
+    
+    try:
+        # Find the exact index of 'copy_excel' in the folder hierarchy
+        # e.g., ('F:\', 'OneDrive...', 'EMKA', 'data', 'copy_excel', 'ZC04', 'EMKA', 'Housing')
+        anchor_idx = p.parts.index('copy_excel')
+        
+        # Grab the folders relative to the anchor
+        sample_id = p.parts[anchor_idx + 1]  # 1 folder down
+        setup = p.parts[anchor_idx + 3]      # 3 folders down
+        
+        return sample_id, setup
+        
+    except (ValueError, IndexError):
+        # Failsafe: If the path is weirdly formatted, leave it blank rather than crashing
+        # if 1 ValueError occurs, both values will be put as 'Unknown' !
+        return "Unknown", "Unknown"
+        
+# %%% run
+
+# 3. Apply the function to the 'directory' column to create the two new columns
+# This unpacks the two extracted values directly into 'sample_ID' and 'setup'
+df_master['sample_ID'], df_master['setup'] = zip(*df_master['directory'].apply(extract_path_info))
+
+# %%% test
+
+df_master['directory'].head()
+    # Out[28]: 
+    # 0    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\Housing
+    # 1    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\Housing
+    # 2    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\Housing
+    # 3    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\Housing
+    # 4    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC69\EMKA\Housing
+    # Name: directory, dtype: str
+
+df_master[['sample_ID' , 'setup']].head()
+    # Out[22]: 
+    #   sample_ID    setup
+    # 0      ZC69  Housing
+    # 1      ZC69  Housing
+    # 2      ZC69  Housing
+    # 3      ZC69  Housing
+    # 4      ZC69  Housing
+
+# %%% timeline
+
+# import pandas as pd
+# from pathlib import Path
+
+def extract_timeline(path_string):
+    p = Path(str(path_string))
+    
+    try:
+        anchor_idx = p.parts.index('copy_excel')
+
+        # Safely check for the optional 4th folder (timeline)
+        # We check if the total number of parts is strictly greater than the index we want to reach
+        if len(p.parts) > (anchor_idx + 4):
+            timeline = p.parts[anchor_idx + 4]
+        else:
+            timeline = "N/A"  # Or you can use None if you prefer actual blank cells
+            
+        return timeline
+        
+    except (ValueError, IndexError):
+        return "Unknown"
+
+# %%%%'
+
+df_master['timeline'] = df_master['directory'].apply(extract_timeline)
+
+list(df_master['timeline'].unique())
+    # Out[30]: 
+    # ['N/A',
+    #  '1.Retraining',
+    #  '2.Retraining',
+    #  'POD 3',
+    #  'POD 4',
+    #  'POD 7',
+    #  'POD 1',
+    #  'Explantation',
+    #  'Finale',
+    #  'Implantation',
+    #  'TI',
+    #  '1.Wiederholung',
+    #  '2.Wiederholung',
+    #  'Ti',
+    #  'Expl',
+    #  'Impl',
+    #  'Sacrifice',
+    #  'Transponderimplantation',
+    #  '1.re',
+    #  '2.re',
+    #  'Opening Seroma',
+    #  'minütlicher meean',
+    #  'Transponder Implantation']
+
+# %%% problematic_directories
+
+# Filter the dataframe for rows where the extraction failed
+failed_rows = df_master[df_master['sample_ID'] == 'Unknown']
+
+# Get the unique original directory paths from those rows
+problematic_directories = failed_rows['directory'].unique()
+
+print(f"Found {len(problematic_directories)} problematic directories that didn't match the rule:\n")
+
+# Print them out one by one so you can inspect them
+for folder in problematic_directories:
+    print(folder)
+
+# out    
+    # Found 4 problematic directories that didn't match the rule:
+    
+        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC17\EMKA
+        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC11\EMKA
+        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC08\EMKA
+        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC06\EMKA
+
+# I checked them : there are single excel files inside : copy_excel\sample_ID\EMKA :
+        # outside other subfolders ( 'Housing', ... ).
+        # so they don't belong to any experiental-setup !
+
+# %%%'
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+output_file = base_dir / "Master_Telemetry_Dataset_2.pkl"
+df_master.to_pickle(output_file)
+
+# %%% unique
+# %%%% setup unique
+
+list(df_master["setup"].unique())
+    # Out[32]: 
+    # ['Housing',
+    #  'OF',
+    #  'OP',
+    #  'Houisng',
+    #  'OR',
+    #  'housing',
+    #  'Open Field',
+    #  'Stoffwechselkäfig',
+    #  'ZC30 housing',
+    #  'ZC30 stoffwechselkäfig',
+    #  'ZC30 or',
+    #  'ZC30 Open Field',
+    #  'ZC29 housing',
+    #  'ZC29 stoffwechselkäfig',
+    #  'ZC29 or',
+    #  'ZC29 Open Field',
+    #  'Surgery',
+    #  'TI',
+    #  'Unknown',
+    #  'OP JoVe']
+
+# %%%% sample_ID _ unique
+
+list(df_master["sample_ID"].unique())
+    # Out[33]: 
+    # ['ZC69',
+    #  'ZC68',
+    #  'ZC67',
+    #  'ZC66',
+    #  'ZC65',
+    #  'ZC64',
+    #  'ZC63',
+    #  'ZC62',
+    #  'ZC61',
+    #  'ZC60',
+    #  'ZC38',
+    #  'ZC37',
+    #  'ZC36',
+    #  'ZC35',
+    #  'ZC34',
+    #  'ZC33',
+    #  'ZC32',
+    #  'ZC31',
+    #  'ZC30',
+    #  'ZC29',
+    #  'ZC28',
+    #  'ZC27',
+    #  'ZC26',
+    #  'ZC25',
+    #  'ZC24',
+    #  'ZC23',
+    #  'ZC22',
+    #  'ZC21',
+    #  'ZC20',
+    #  'ZC19',
+    #  'ZC18',
+    #  'Unknown',
+    #  'ZC17',
+    #  'ZC16',
+    #  'ZC15',
+    #  'ZC14',
+    #  'ZC13',
+    #  'ZC12',
+    #  'ZC11',
+    #  'ZC10',
+    #  'ZC09',
+    #  'ZC08',
+    #  'ZC07',
+    #  'ZC06',
+    #  'ZC05',
+    #  'ZC04']
+
+# %%%% mark-label
+
+list(df_master["mark-label"].unique())
+    # Out[59]: 
+    # ['noname #1',
+    #  nan,
+    #  'Noname #1',
+    #  '1.retraining',
+    #  'POD 7',
+    #  'Noname #2',
+    #  'POD 3',
+    #  'housing',
+    #  'Noname #3',
+    #  '2.retraining',
+    #  'POD 1',
+    #  'Noname #5',
+    #  'POD 4',
+    #  'noname #4']
+
+# %%% clean
+
+# 1. Create a dictionary of { 'Bad Name' : 'Good Name' }
+corrections_Housing = {
+    'Houisng': 'Housing',
+    'housing': 'Housing',
+    'ZC30 housing': 'Housing',
+    'ZC29 housing': 'Housing'
+}
+
+# 2. Apply the replacement
+df_master['setup'] = df_master['setup'].replace(corrections_Housing)
+
+list(df_master["setup"].unique())
+    # Out[35]: 
+    # ['Housing',
+    #  'OF',
+    #  'OP',
+    #  'OR',
+    #  'Open Field',
+    #  'Stoffwechselkäfig',
+    #  'ZC30 stoffwechselkäfig',
+    #  'ZC30 or',
+    #  'ZC30 Open Field',
+    #  'ZC29 stoffwechselkäfig',
+    #  'ZC29 or',
+    #  'ZC29 Open Field',
+    #  'Surgery',
+    #  'TI',
+    #  'Unknown',
+    #  'OP JoVe']
+
+# %%%%'
+
+# rest of the corrections.
+corrections = {'ZC30 stoffwechselkäfig': 'Stoffwechselkäfig',
+               'ZC30 or':'OR',
+               'ZC30 Open Field':'OF',
+               'ZC29 stoffwechselkäfig': 'Stoffwechselkäfig',
+               'ZC29 or': 'OR',
+               'ZC29 Open Field':'OF',
+               'Open Field':'OF'
+               }
+
+# Apply the replacement
+df_master['setup'] = df_master['setup'].replace(corrections)
+
+list(df_master["setup"].unique())
+    # Out[21]: 
+    # ['Housing',
+    #  'OF',
+    #  'OP',
+    #  'OR',
+    #  'Stoffwechselkäfig',
+    #  'Surgery',
+    #  'TI',
+    #  'Unknown',
+    #  'OP JoVe']
+
+# %%%%'
+
+test = df_master[ df_master["setup"] == 'OP JoVe' ]
+
+test['directory'][:4]
+    # Out[25]: 
+    # 39292    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC16\EMKA\OP JoVe
+    # 39293    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC16\EMKA\OP JoVe
+    # 39294    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC16\EMKA\OP JoVe
+    # 39295    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC16\EMKA\OP JoVe
+    # Name: directory, dtype: str
+
+# %% timestamp
+
+# check the original time data.
+
+df_master[['cpu-date', 'cpu-time']].head()
+    # Out[44]: 
+    #     cpu-date  cpu-time
+    # 0  10-Oct-23  12:01:10
+    # 1  10-Oct-23  13:01:10
+    # 2  10-Oct-23  14:01:09
+    # 3  10-Oct-23  15:01:10
+    # 4  10-Oct-23  16:01:10
+
+df_master[['cpu-date', 'cpu-time']][1000:1005]
+    # Out[45]: 
+    #        cpu-date  cpu-time
+    # 1000  12-Oct-23  21:02:21
+    # 1001  12-Oct-23  22:02:21
+    # 1002  12-Oct-23  23:02:22
+    # 1003  13-Oct-23  00:02:21
+    # 1004  13-Oct-23  01:02:21
+
+df_master[['cpu-date', 'cpu-time']][10000:10005]
+    # Out[46]: 
+    #         cpu-date  cpu-time
+    # 10000  04-May-21  09:56:56
+    # 10001  04-May-21  09:57:56
+    # 10002  04-May-21  09:58:55
+    # 10003  04-May-21  09:59:56
+    # 10004  04-May-21  10:00:55
+
+df_master[['cpu-date', 'cpu-time']][20000:20005]
+    # Out[47]: 
+    #         cpu-date  cpu-time
+    # 20000  09-Feb-21  12:16:42
+    # 20001  09-Feb-21  12:17:42
+    # 20002  09-Feb-21  12:18:43
+    # 20003  09-Feb-21  12:19:42
+    # 20004  09-Feb-21  12:20:43
 
 
-# %%% pickle
+df_master[['cpu-date', 'cpu-time']][30000:30005]
+    # Out[48]: 
+    #         cpu-date  cpu-time
+    # 30000  19-Sep-20  03:40:25
+    # 30001  19-Sep-20  04:40:24
+    # 30002  19-Sep-20  05:40:25
+    # 30003  19-Sep-20  06:40:25
+    # 30004  19-Sep-20  07:40:24
 
-# dump the list of all the extracted data ( output of the loop ).
-
-import pickle
-from pathlib import Path
-
-# Assuming base_dir is still defined from your previous script. 
-# If not, just redefine it: base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel")
-backup_file = base_dir / "all_data_raw_backup.pkl"
-
-print("Saving binary backup...")
-
-# Open the file in 'wb' (Write Binary) mode
-with open(backup_file, 'wb') as file:
-    pickle.dump(all_data, file)
-
-print(f"Success! Backed up exactly as it is in memory to:\n{backup_file}")
+df_master[['cpu-date', 'cpu-time']][40000:40005]
+    # Out[49]: 
+    #         cpu-date  cpu-time
+    # 40000  03-Aug-20  11:14:48
+    # 40001  03-Aug-20  11:15:49
+    # 40002  03-Aug-20  11:16:49
+    # 40003  03-Aug-20  11:17:48
+    # 40004  03-Aug-20  11:18:49
 
 
-    # Saving binary backup...
-    # Success! Backed up exactly as it is in memory to:
-    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\all_data_raw_backup.pkl
+df_master[['cpu-date', 'cpu-time']][50000:50005]
+    # Out[50]: 
+    #         cpu-date  cpu-time
+    # 50000  03-Jul-20  19:27:05
+    # 50001  03-Jul-20  19:28:06
+    # 50002  03-Jul-20  19:29:05
+    # 50003  03-Jul-20  19:30:06
+    # 50004  03-Jul-20  19:31:06
 
-# %%%% load pickle
+df_master[['cpu-date', 'cpu-time']][60000:60005]
+    # Out[51]: 
+    #         cpu-date  cpu-time
+    # 60000  22-Jun-20  19:17:34
+    # 60001  22-Jun-20  20:17:33
+    # 60002  22-Jun-20  21:17:33
+    # 60003  22-Jun-20  22:17:34
+    # 60004  22-Jun-20  23:17:33
 
-import pickle
-from pathlib import Path
+# %%% convert
 
-backup_file = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel\all_data_raw_backup.pkl")
+# convert it to a a pandas datetime object.
 
-# Open the file in 'rb' (Read Binary) mode
-with open(backup_file, 'rb') as file:
-    all_data = pickle.load(file)
+# 1. Combine the date and time strings into a single column with a space in between
+combined_datetime_str = df_master['cpu-date'] + ' ' + df_master['cpu-time']
 
-print(f"Loaded {len(all_data)} dataframes from backup!")
+combined_datetime_str.head()
+    # Out[53]: 
+    # 0    10-Oct-23 12:01:10
+    # 1    10-Oct-23 13:01:10
+    # 2    10-Oct-23 14:01:09
+    # 3    10-Oct-23 15:01:10
+    # 4    10-Oct-23 16:01:10
+    # dtype: str
+
+# 2. Convert the combined string into a true pandas datetime object
+    # The format '%d-%b-%y %H:%M:%S' tells pandas exactly how to read your specific layout:
+    # %d = 2-digit day (10)
+    # %b = Abbreviated month (Oct)
+    # %y = 2-digit year (23)
+    # %H:%M:%S = Hours:Minutes:Seconds
+df_master['timestamp'] = pd.to_datetime(combined_datetime_str, format='%d-%b-%y %H:%M:%S')
+
+# 3. Verify the conversion worked by checking the data types
+print(df_master[['cpu-date', 'cpu-time', 'timestamp']].head())
+    #     cpu-date  cpu-time           timestamp
+    # 0  10-Oct-23  12:01:10 2023-10-10 12:01:10
+    # 1  10-Oct-23  13:01:10 2023-10-10 13:01:10
+    # 2  10-Oct-23  14:01:09 2023-10-10 14:01:09
+    # 3  10-Oct-23  15:01:10 2023-10-10 15:01:10
+    # 4  10-Oct-23  16:01:10 2023-10-10 16:01:10
+
+
+# Data Types:
+print(df_master[['cpu-date', 'cpu-time', 'timestamp']].dtypes)
+    # cpu-date                str
+    # cpu-time                str
+    # timestamp    datetime64[us]
+    # dtype: object
+
+# %%% save
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+output_file = base_dir / "Master_Telemetry_Dataset_2.pkl"
+df_master.to_pickle(output_file)
+
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+source_file = base_dir / "Master_Telemetry_Dataset_2.pkl"
+df_master = pd.read_pickle(source_file)
+
+# %% reorder columns
+
+ID_columns = ['sample_ID', 'setup', 'timeline', 'timestamp']
+
+cols = ID_columns + [col for col in df_master.columns
+                     if col not in ID_columns
+                     ]
+
+df_master = df_master[cols]
+
+# %% I/O
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+output_file = base_dir / "Master_Telemetry_Dataset_3.pkl"
+df_master.to_pickle(output_file)
+
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+output_file = base_dir / "Master_Telemetry_Dataset_3.xlsx"
+df_master.to_excel(output_file, index=False)
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+source_file = base_dir / "Master_Telemetry_Dataset_3.pkl"
+df_master = pd.read_pickle(source_file)
+
+
+# %% filter
+
+# 1. Create the 'Housing' subset
+# We use .copy() to ensure this new dataframe is completely independent of the master dataset
+df_housing = df_master[df_master['setup'] == 'Housing'].copy()
+
+# 2. Verify the extraction
+print(f"Total rows in Master Dataset: {len(df_master)}")
+print(f"Total rows in Housing Subset: {len(df_housing)}")
+
+# Optional: Double-check that ONLY 'Housing' exists in this new dataframe
+print("\nUnique setups in new dataframe:")
+print(df_housing['setup'].unique())
+
+# %%% out
+
+    # Total rows in Master Dataset: 66049
+    # Total rows in Housing Subset: 32464
+    
+    # Unique setups in new dataframe:
+    # <StringArray>
+    # ['Housing']
+    # Length: 1, dtype: str
+
+# %%%'
+
+samples = list(df_housing['sample_ID'].unique())
+
+len(samples)
+    # Out[42]: 43
+
+samples
+    # Out[39]: 
+    # ['ZC69',
+    #  'ZC68',
+    #  'ZC67',
+    #  'ZC66',
+    #  'ZC65',
+    #  'ZC64',
+    #  'ZC63',
+    #  'ZC62',
+    #  'ZC61',
+    #  'ZC60',
+    #  'ZC38',
+    #  'ZC37',
+    #  'ZC36',
+    #  'ZC35',
+    #  'ZC34',
+    #  'ZC32',
+    #  'ZC31',
+    #  'ZC30',
+    #  'ZC29',
+    #  'ZC28',
+    #  'ZC27',
+    #  'ZC26',
+    #  'ZC25',
+    #  'ZC24',
+    #  'ZC23',
+    #  'ZC22',
+    #  'ZC21',
+    #  'ZC20',
+    #  'ZC19',
+    #  'ZC18',
+    #  'ZC17',
+    #  'ZC15',
+    #  'ZC14',
+    #  'ZC13',
+    #  'ZC12',
+    #  'ZC11',
+    #  'ZC10',
+    #  'ZC09',
+    #  'ZC08',
+    #  'ZC07',
+    #  'ZC06',
+    #  'ZC05',
+    #  'ZC04']
 
 # %%'
+
+df_master.iloc[:5,:4]
+    # Out[83]: 
+    #   sample_ID    setup timeline           timestamp
+    # 0      ZC69  Housing      N/A 2023-10-10 12:01:10
+    # 1      ZC69  Housing      N/A 2023-10-10 13:01:10
+    # 2      ZC69  Housing      N/A 2023-10-10 14:01:09
+    # 3      ZC69  Housing      N/A 2023-10-10 15:01:10
+    # 4      ZC69  Housing      N/A 2023-10-10 16:01:10
+
+# %%'
+
 
 

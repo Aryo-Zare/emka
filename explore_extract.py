@@ -370,4 +370,153 @@ df.loc[["viper", "sidewinder"] , "shield" ]
 # %%
 
 
+# %% explore original column names
+
+# test
+# this is from the the older version of the extract-cell :
+    # then, the column names & units were not merged
+    # duplicate column names were also not re-named.
+
+all_data[1].columns
+    # Out[96]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=208)
+
+all_data[100].columns
+    # Out[97]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=208)
+
+all_data[1000].columns
+    # Out[98]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=209)
+
+all_data[-1].columns
+    # Out[99]: 
+    # Index(['cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index',
+    #        'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver',
+    #        'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory'],
+    #       dtype='object', name=208)
+
+
+# %%% stat
+
+# Create a set of all unique column structures in your list
+unique_col_sets = set(tuple(df.columns) for df in all_data)
+
+print(f"Found {len(unique_col_sets)} completely different column structures out of {len(all_data)} files.\n")
+
+# Print them out to see the differences
+for i, cols in enumerate(unique_col_sets):
+    print(f"Structure {i+1} (Length: {len(cols)}):")
+    print(cols)
+    print("-" * 40)
+
+
+    # Found 6 completely different column structures out of 1206 files.
+    
+    # Structure 1 (Length: 15):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 2 (Length: 7):
+    # ('cpu-date', 'cpu-time', 'period-time', 'step-index', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 3 (Length: 8):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 4 (Length: 16):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Abweichung in% HR vs HR', 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 5 (Length: 16):
+    # ('cpu-date', 'cpu-time', 'period-time', 'mark-label', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', nan, 'Source_File', 'directory')
+    # ----------------------------------------
+    # Structure 6 (Length: 14):
+    # ('cpu-date', 'cpu-time', 'period-time', 'step-index', 'BB__aver', 'HR__aver', 'DBP__aver', 'SBP__aver', 'MBP__aver', 'aver__aver', 'aver__aver', 'HR__aver', 'Source_File', 'directory')
+    # ----------------------------------------
+
+
+# %%% pickle
+
+# dump the list of all the extracted data ( output of the loop ).
+
+import pickle
+from pathlib import Path
+
+# Assuming base_dir is still defined from your previous script. 
+# If not, just redefine it: base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel")
+backup_file = base_dir / "all_data_raw_backup.pkl"
+
+print("Saving binary backup...")
+
+# Open the file in 'wb' (Write Binary) mode
+with open(backup_file, 'wb') as file:
+    pickle.dump(all_data, file)
+
+print(f"Success! Backed up exactly as it is in memory to:\n{backup_file}")
+
+
+    # Saving binary backup...
+    # Success! Backed up exactly as it is in memory to:
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\all_data_raw_backup.pkl
+
+# %%%% load pickle
+
+import pickle
+from pathlib import Path
+
+backup_file = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\copy_excel\all_data_raw_backup.pkl")
+
+# Open the file in 'rb' (Read Binary) mode
+with open(backup_file, 'rb') as file:
+    all_data = pickle.load(file)
+
+print(f"Loaded {len(all_data)} dataframes from backup!")
+
+
+# %% count
+# %%% lines
+
+# counting the number of lines in the log text-file.
+
+from pathlib import Path
+
+file_path = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER\extraction_log__.txt")
+
+with file_path.open("r", encoding="utf-8") as f:
+    num_lines = sum(1 for _ in f)
+
+print(num_lines)
+
+    # Out :
+    # 1455
+
+# %%% excel files
+
+# count the number of Excel files ion the folder.
+
+from pathlib import Path
+
+folder = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel")
+
+excel_extensions = {".xls", ".xlsx", ".xlsb"}
+
+num_excel_files = sum(
+    1 
+    for file in folder.rglob("*")
+    if file.is_file() and file.suffix.lower() in excel_extensions
+)
+
+print(num_excel_files)
+
+    # out
+    # 1453
+
+# %%'
 
