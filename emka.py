@@ -547,28 +547,47 @@ list(df_master['timeline'].unique())
 # %%% problematic_directories
 
 # Filter the dataframe for rows where the extraction failed
-failed_rows = df_master[df_master['sample_ID'] == 'Unknown']
+# failed_rows = df_master[df_master['sample_ID'] == 'Unknown']  : this also works , but the main problem is assignment to a setup directory !
+    # 'sample_ID' is always present in the original directory !
+    # so the problem is solely 'setup'.
+failed_rows = df_master[df_master['setup'] == 'Unknown']
 
-# Get the unique original directory paths from those rows
-problematic_directories = failed_rows['directory'].unique()
+# get the unique combinations of 2 columns.
+    # out : index is for the 1st occurence of the combination !
+failed_rows[['directory','Source_File']].drop_duplicates()
+    # Out[18]: 
+    #                                                                 directory                                     Source_File
+    # 36836  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC17\EMKA            0a66_0a66_2020_august_24_01.x00.xlsb
+    # 43007  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC11\EMKA              0a11_0a11_2020_july_07_01.x00.xlsb
+    # 60806  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC08\EMKA  zc08_0a13_rx_front-housing_2020_06_01.x00.xlsb
+    # 62981  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC06\EMKA             0a11_0a11_rx_of_2020_03_15.x00.xlsb
 
-print(f"Found {len(problematic_directories)} problematic directories that didn't match the rule:\n")
-
-# Print them out one by one so you can inspect them
-for folder in problematic_directories:
-    print(folder)
-
-# out    
-    # Found 4 problematic directories that didn't match the rule:
-    
-        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC17\EMKA
-        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC11\EMKA
-        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC08\EMKA
-        # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC06\EMKA
 
 # I checked them : there are single excel files inside : copy_excel\sample_ID\EMKA :
         # outside other subfolders ( 'Housing', ... ).
         # so they don't belong to any experiental-setup !
+
+# %%%%'
+
+# older method
+
+    # # Get the unique original directory paths from those rows
+    # problematic_directories = failed_rows['directory'].unique()
+    
+    # print(f"Found {len(problematic_directories)} problematic directories that didn't match the rule:\n")
+    
+    # # Print them out one by one so you can inspect them
+    # for folder in problematic_directories:
+    #     print(folder)
+    
+    # # out    
+    #     # Found 4 problematic directories that didn't match the rule:
+        
+    #         # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC17\EMKA
+    #         # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC11\EMKA
+    #         # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC08\EMKA
+    #         # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC06\EMKA
+
 
 # %%%'
 
@@ -743,6 +762,56 @@ test['directory'][:4]
     # 39295    F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC16\EMKA\OP JoVe
     # Name: directory, dtype: str
 
+# %%%% ZC18
+
+# this pig : TI is directly under EMKA :
+    # copy_excel\ZC18\EMKA\TI
+    # the normal should be :  copy_excel\ZC18\EMKA\surgery\TI
+
+mask_setup_TI = df_master['setup'] == 'TI'
+df_setup_TI = df_master[mask_setup_TI]
+df_setup_TI.shape
+    # Out[57]: (174, 22)
+
+df_setup_TI['sample_ID'].unique()
+    # Out[58]: 
+    # <StringArray>
+    # ['ZC18']
+    # Length: 1, dtype: str
+
+
+df_setup_TI[['sample_ID','setup','timeline']][:5]
+    # Out[59]: 
+    #       sample_ID setup timeline
+    # 36662      ZC18    TI      N/A
+    # 36663      ZC18    TI      N/A
+    # 36664      ZC18    TI      N/A
+    # 36665      ZC18    TI      N/A
+    # 36666      ZC18    TI      N/A
+
+# %%%%% fix
+
+# 1. Create a mask that finds the exact rows with the mistake
+# Use parentheses around each condition when combining with '&' (AND)
+mask_mistake = (df_master['sample_ID'] == 'ZC18') & (df_master['setup'] == 'TI')
+
+# 2. Use .loc[rows, columns] to overwrite the data
+df_master.loc[mask_mistake, 'setup'] = 'Surgery'
+df_master.loc[mask_mistake, 'timeline'] = 'TI'
+
+# 3. Verify the changes worked
+print("Verifying the fix for ZC18:")
+mask_check = (df_master['sample_ID'] == 'ZC18') & (df_master['timeline'] == 'TI')
+print(df_master.loc[mask_check, ['sample_ID', 'setup', 'timeline']].head())
+    #       sample_ID    setup timeline
+    # 36662      ZC18  Surgery       TI
+    # 36663      ZC18  Surgery       TI
+    # 36664      ZC18  Surgery       TI
+    # 36665      ZC18  Surgery       TI
+    # 36666      ZC18  Surgery       TI
+
+# now, in the original dataset, under the column 'setup' : there would be no item as 'TI'.
+
 # %% timestamp
 
 # check the original time data.
@@ -883,21 +952,6 @@ cols = ID_columns + [col for col in df_master.columns
 
 df_master = df_master[cols]
 
-# %% I/O
-
-base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
-output_file = base_dir / "Master_Telemetry_Dataset_3.pkl"
-df_master.to_pickle(output_file)
-
-
-base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
-output_file = base_dir / "Master_Telemetry_Dataset_3.xlsx"
-df_master.to_excel(output_file, index=False)
-
-base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
-source_file = base_dir / "Master_Telemetry_Dataset_3.pkl"
-df_master = pd.read_pickle(source_file)
-
 
 # %% filter
 
@@ -987,7 +1041,24 @@ df_master.iloc[:5,:4]
     # 3      ZC69  Housing      N/A 2023-10-10 15:01:10
     # 4      ZC69  Housing      N/A 2023-10-10 16:01:10
 
+
+# %% I/O
+
+file_name = 'Master_Telemetry_Dataset_4'
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+output_file = base_dir / f"{file_name}.pkl"
+df_master.to_pickle(output_file)
+
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+output_file = base_dir / f"{file_name}.xlsx"
+df_master.to_excel(output_file, index=False)
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+source_file = base_dir / f"{file_name}.pkl"
+df_master = pd.read_pickle(source_file)
+
+
 # %%'
-
-
 
