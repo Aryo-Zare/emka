@@ -1116,6 +1116,10 @@ sorted( df_master['sample_ID'].unique() )
     #  'ZC67',
     #  'ZC68',
     #  'ZC69']
+#_______________________
+# note pigs ZC39 - 59 do not exist.
+    # they were not implanted with transponder.
+
 
 list(df_master["setup"].unique())
     # Out[63]: ['Housing', 'OF', 'Surgery', 'Stoffwechselkäfig']
@@ -1360,6 +1364,9 @@ set_all_pigs
     #  'ZC68',
     #  'ZC69'}
 
+len(set_all_pigs)
+    # Out[82]: 42
+
 # Filter the dataset to ONLY look at the 'TI' rows
 df_TI = df_master[df_master['timeline'] == 'TI']
 set_TI = set(df_TI['sample_ID'].unique())
@@ -1451,6 +1458,376 @@ timeline_availability
     # ZC68                                                         [N/A]
     # ZC69                                                         [N/A]
     # Name: timeline, dtype: object
+
+#===========================================
+#---- Fetch date_TI
+
+# the non-standard 'ZC6' entry was renamed to 'ZC06'
+overview_3 = pd.read_excel(  r'F:\OneDrive - Uniklinik RWTH Aachen\kidney\overview_3.xlsx' , header=[0,1] , index_col=0 )
+overview_3.iloc[:7,:7]
+    # Out[55]: 
+    #           Sample ID:          Treatment             Group:         BW Eingang  \
+    #   Unnamed: 0_level_1 Unnamed: 1_level_1 Unnamed: 2_level_1 Unnamed: 3_level_1   
+    # 0               ZC04            DBD-HTK                  1               25.6   
+    # 1               ZC05         DBD-Ecosol                  2               20.2   
+    # 2               ZC06            DBD-HTK                  1                 21   
+    # 3               ZC07         DBD-Ecosol                  2               18.7   
+    # 4               ZC08            DBD-HTK                  1                 19   
+    # 5               ZC09         DBD-Ecosol                  2               22.9   
+    # 6               ZC10            DBD-HTK                  1               22.3   
+    
+    #              Ear tag   Operation date Ti: Operation TI incisicion time:  
+    #   Unnamed: 4_level_1   Unnamed: 5_level_1            Unnamed: 6_level_1  
+    # 0                140  2020-02-03 00:00:00                      09:00:00  
+    # 1                142  2020-02-25 00:00:00                      09:30:00  
+    # 2                143  2020-02-25 00:00:00                      06:40:00  
+    # 3                158  2020-05-25 00:00:00                      08:15:00  
+    # 4                157  2020-05-25 00:00:00                      10:42:00  
+    # 5                159  2020-06-15 00:00:00                      08:55:00  
+    # 6                160  2020-06-15 00:00:00                      06:27:00  
+
+overview_3.iloc[:7,[0,5]]
+    # Out[58]: 
+    #           Sample ID:   Operation date Ti:
+    #   Unnamed: 0_level_1   Unnamed: 5_level_1
+    # 0               ZC04  2020-02-03 00:00:00
+    # 1               ZC05  2020-02-25 00:00:00
+    # 2               ZC06  2020-02-25 00:00:00
+    # 3               ZC07  2020-05-25 00:00:00
+    # 4               ZC08  2020-05-25 00:00:00
+    # 5               ZC09  2020-06-15 00:00:00
+    # 6               ZC10  2020-06-15 00:00:00
+
+df_date_TI = overview_3.iloc[:, [0, 5]].copy()
+df_date_TI.columns = ['sample_ID', 'date_TI']
+
+df_date_TI.shape
+    # Out[63]: (82, 2)
+
+df_date_TI[:5]
+    # Out[64]: 
+    #   sample_ID              date_TI
+    # 0      ZC04  2020-02-03 00:00:00
+    # 1      ZC05  2020-02-25 00:00:00
+    # 2      ZC06  2020-02-25 00:00:00
+    # 3      ZC07  2020-05-25 00:00:00
+    # 4      ZC08  2020-05-25 00:00:00
+
+df_date_TI[-5:]
+    # Out[65]: 
+    #    sample_ID date_TI
+    # 77       NaN     NaN
+    # 78       NaN     NaN
+    # 79       NaN     NaN
+    # 80       NaN     NaN
+    # 81       NaN     NaN
+
+# how='all' means: drop a row only if all columns in that row are NaN
+df_date_TI_2 = df_date_TI.dropna(how='all')
+df_date_TI_2.shape
+    # Out[67]: (66, 2)
+
+df_date_TI_2[-5:]
+    # Out[68]: 
+    #    sample_ID              date_TI
+    # 61      ZC65  2023-07-24 00:00:00
+    # 62      ZC66  2023-08-21 00:00:00
+    # 63      ZC67  2023-08-29 00:00:00
+    # 64      ZC68  2023-09-25 00:00:00
+    # 65      ZC69  2023-10-09 00:00:00
+
+df_date_TI_2.info()
+    # <class 'pandas.DataFrame'>
+    # RangeIndex: 66 entries, 0 to 65
+    # Data columns (total 2 columns):
+    #  #   Column     Non-Null Count  Dtype 
+    # ---  ------     --------------  ----- 
+    #  0   sample_ID  66 non-null     str   
+    #  1   date_TI    66 non-null     object
+    # dtypes: object(1), str(1)
+    # memory usage: 1.2+ KB
+
+# converting the date objects to the standard pandas datetime object.
+# there are '-' values ( pigs not implanted with transponder {ZC39-59})   =>  errors='coerce'.
+df_date_TI_2['date_TI'] = pd.to_datetime(df_date_TI_2['date_TI'],
+                                         errors='coerce')
+
+df_date_TI_3 = df_date_TI_2.dropna(subset=['date_TI']).reset_index(drop=True).copy()
+
+df_date_TI_3.shape
+    # Out[75]: (44, 2)
+
+df_date_TI_3[:4]
+    # Out[76]: 
+    #   sample_ID    date_TI
+    # 0      ZC04 2020-02-03
+    # 1      ZC05 2020-02-25
+    # 2      ZC06 2020-02-25
+    # 3      ZC07 2020-05-25
+
+df_date_TI_3.info()
+    # <class 'pandas.DataFrame'>
+    # RangeIndex: 44 entries, 0 to 43
+    # Data columns (total 2 columns):
+    #  #   Column     Non-Null Count  Dtype         
+    # ---  ------     --------------  -----         
+    #  0   sample_ID  44 non-null     str           
+    #  1   date_TI    44 non-null     datetime64[us]
+    # dtypes: datetime64[us](1), str(1)
+    # memory usage: 836.0 bytes
+
+df_overview_TI.rename(columns={'date_TI': 'TI_start_date_overview'}, inplace=True)
+
+#---- save
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+file_name = 'df_overview_TI'   # formerly : 'df_date_TI_3'
+output_file = base_dir / f"{file_name}.pkl"
+df_overview_TI.to_pickle(output_file)
+
+# read
+df_overview_TI = pd.read_pickle( base_dir / f"{file_name}.pkl" )
+
+#=====================================================
+#---- DIFFERENCE
+
+# diffeence of sample_IDs in the EMKA dataset with the one in the excel sheet 'overview'.
+
+set_date_TI_3 = set(df_date_TI_3['sample_ID'])
+
+missing_pigs - set_date_TI_3
+    # Out[96]: set()
+# => all pigs' Ti-date is now known !
+
+#=====================================================
+#---- compare
+
+# checking for consistency.
+# this compares if the TI-start-dates in pigs that have them in df_master is consistent with that from the 'overview' dataset.
+    # for those pigs that have TI-start-date in both dataframes.
+
+df_master_TI = df_master[df_master['timeline'] == 'TI']
+
+# Find the exact baseline date for each pig
+# We group by the pig and find the minimum (earliest) timestamp in their 'TI' data
+df_master_TI_baselines = df_master_TI.groupby('sample_ID')['timestamp'].min().reset_index()
+df_master_TI_baselines.rename(columns={'timestamp': 'TI_start_date'}, inplace=True)
+
+df_master_TI_baselines.shape
+    # Out[30]: (24, 2)
+
+df_master_TI_baselines
+    # Out[31]: 
+    #    sample_ID       TI_start_date
+    # 0       ZC07 2020-05-25 08:49:39
+    # 1       ZC08 2020-05-25 11:26:03
+    # 2       ZC09 2020-06-15 09:30:41
+    # 3       ZC10 2020-06-15 12:58:57
+    # ...
+
+df_overview_TI
+    # Out[32]: 
+    #    sample_ID    date_TI
+    # 0       ZC04 2020-02-03
+    # 1       ZC05 2020-02-25
+    # 2       ZC06 2020-02-25
+    # ...
+
+# Merge your calculated baselines with the adjunct dataframe
+# 'inner' ensures we only compare pigs that exist in BOTH lists
+comparison_df = pd.merge(df_master_TI_baselines, 
+                         df_overview_TI, 
+                         on='sample_ID', 
+                         how='inner')
+
+comparison_df.shape
+    # Out[35]: (23, 3)
+
+comparison_df
+    # Out[34]: 
+    #    sample_ID       TI_start_date    date_TI
+    # 0       ZC07 2020-05-25 08:49:39 2020-05-25
+    # 1       ZC08 2020-05-25 11:26:03 2020-05-25
+    # 2       ZC09 2020-06-15 09:30:41 2020-06-15
+    # ...
+
+comparison_df.rename(columns={'TI_start_date': 'TI_start_date_master', 
+                              'date_TI':'TI_start_date_overview'
+                              }, 
+                     inplace=True)
+
+
+# Strip the hours/minutes/seconds away from both sides to ensure a fair comparison
+comparison_df['TI_start_date_master_2'] = comparison_df['TI_start_date_master'].dt.normalize()
+
+comparison_df[['TI_start_date_master_2','TI_start_date_overview']]
+    # Out[40]: 
+    #    TI_start_date_master_2 TI_start_date_overview
+    # 0              2020-05-25             2020-05-25
+    # 1              2020-05-25             2020-05-25
+    # 2              2020-06-15             2020-06-15
+    # 3              2020-06-15             2020-06-15
+    # 4              2020-06-29             2020-06-29
+    # 5              2020-07-27             2020-07-27
+    # 6              2020-08-03             2020-08-03
+    # 7              2020-08-31             2020-08-31
+    # 8              2020-08-31             2020-08-31
+    # 9              2020-09-07             2020-09-07
+    # 10             2020-09-07             2020-09-07
+    # 11             2020-10-05             2020-10-05
+    # 12             2020-10-05             2020-10-05
+    # 13             2020-11-02             2020-11-02
+    # 14             2020-11-02             2020-11-02
+    # 15             2020-11-09             2020-11-09
+    # 16             2020-11-09             2020-11-09
+    # 17             2021-01-18             2021-01-18
+    # 18             2021-01-25             2021-01-25
+    # 19             2021-01-25             2021-01-25
+    # 20             2021-02-22             2021-02-22
+    # 21             2021-02-22             2021-02-22
+    # 22             2021-03-01             2021-03-01
+
+comparison_df['is_consistent'] = comparison_df['TI_start_date_master_2'] == comparison_df['TI_start_date_overview']
+
+comparison_df['is_consistent'].unique()
+    # Out[43]: array([ True])
+# all are 'True'.
+
+# df_TI_ID_date = df_TI[['sample_ID','timeline','cpu-date']].drop_duplicates()
+
+#=====================================================
+#---- start-dates _ all
+
+# get the start-dates fro all pigs in a separate dataframe.
+
+# pigs that have TI-dates in the master dataframe, & their TI-dates.
+df_master_TI_baselines
+    # Out[31]: 
+    #    sample_ID       TI_start_date
+    # 0       ZC07 2020-05-25 08:49:39
+    # 1       ZC08 2020-05-25 11:26:03
+    # 2       ZC09 2020-06-15 09:30:41
+    # 3       ZC10 2020-06-15 12:58:57
+    # ...
+
+df_master_TI_baselines['TI_start_date_master'] = df_master_TI_baselines['TI_start_date'].dt.normalize()
+df_master_TI_baselines.drop(columns=['TI_start_date'], inplace=True)
+df_master_TI_baselines.head()
+    # Out[58]: 
+    #   sample_ID TI_start_date_master
+    # 0      ZC07           2020-05-25
+    # 1      ZC08           2020-05-25
+    # 2      ZC09           2020-06-15
+    # 3      ZC10           2020-06-15
+    # 4      ZC11           2020-06-29
+
+set_missing_pigs = {'ZC04',
+                    'ZC05',
+                    'ZC27',
+                    'ZC33',
+                    'ZC35',
+                    'ZC36',
+                    'ZC37',
+                    'ZC38',
+                    'ZC60',
+                    'ZC61',
+                    'ZC62',
+                    'ZC63',
+                    'ZC64',
+                    'ZC65',
+                    'ZC66',
+                    'ZC67',
+                    'ZC68',
+                    'ZC69'}
+
+# the adjunct dataframe containing TI dates from the pigs missing it.
+df_overview_TI.head()
+    # Out[51]: 
+    #   sample_ID TI_start_date_overview
+    # 0      ZC04             2020-02-03
+    # 1      ZC05             2020-02-25
+    # 2      ZC06             2020-02-25
+    # 3      ZC07             2020-05-25
+    # 4      ZC08             2020-05-25
+
+
+# 1. Isolate ONLY the missing pigs from the adjunct dataframe
+# This ensures pigs like ZC07 and ZC08 (which are in both) don't get duplicated
+df_missing_dates = df_overview_TI[df_overview_TI['sample_ID'].isin(set_missing_pigs)].copy()
+
+# 2. Standardize the date column names
+# pandas pd.concat() needs the columns to have the exact same name to stack them perfectly
+df_master_TI_baselines = df_master_TI_baselines.rename(columns={'TI_start_date_master': 'TI_start_date'})
+df_missing_dates = df_missing_dates.rename(columns={'TI_start_date_overview': 'TI_start_date'})
+
+# 3. Stack (concatenate) the two dataframes vertically
+df_TI_start_dates_all = pd.concat([df_master_TI_baselines, df_missing_dates], ignore_index=True)
+
+# 4. Sort alphabetically by sample_ID and clean up the index for a professional look
+df_TI_start_dates_all = df_TI_start_dates_all.sort_values(by='sample_ID').reset_index(drop=True)
+
+df_TI_start_dates_all.shape
+    # Out[64]: (42, 2)
+
+df_TI_start_dates_all
+    # Out[65]: 
+    #    sample_ID TI_start_date
+    # 0       ZC04    2020-02-03
+    # 1       ZC05    2020-02-25
+    # 2       ZC07    2020-05-25
+    # 3       ZC08    2020-05-25
+    # 4       ZC09    2020-06-15
+    # 5       ZC10    2020-06-15
+    # 6       ZC11    2020-06-29
+    # 7       ZC12    2020-06-29
+    # 8       ZC14    2020-07-27
+    # 9       ZC15    2020-08-03
+    # 10      ZC17    2020-08-31
+    # 11      ZC18    2020-08-31
+    # 12      ZC19    2020-09-07
+    # 13      ZC20    2020-09-07
+    # 14      ZC21    2020-10-05
+    # 15      ZC22    2020-10-05
+    # 16      ZC23    2020-11-02
+    # 17      ZC24    2020-11-02
+    # 18      ZC25    2020-11-09
+    # 19      ZC26    2020-11-09
+    # 20      ZC27    2021-01-18
+    # 21      ZC28    2021-01-18
+    # 22      ZC29    2021-01-25
+    # 23      ZC30    2021-01-25
+    # 24      ZC31    2021-02-22
+    # 25      ZC32    2021-02-22
+    # 26      ZC33    2021-03-01
+    # 27      ZC34    2021-03-01
+    # 28      ZC35    2021-03-29
+    # 29      ZC36    2021-03-29
+    # 30      ZC37    2021-04-19
+    # 31      ZC38    2021-04-19
+    # 32      ZC60    2023-05-22
+    # 33      ZC61    2023-06-15
+    # 34      ZC62    2023-06-21
+    # 35      ZC63    2023-07-10
+    # 36      ZC64    2023-07-17
+    # 37      ZC65    2023-07-24
+    # 38      ZC66    2023-08-21
+    # 39      ZC67    2023-08-29
+    # 40      ZC68    2023-09-25
+    # 41      ZC69    2023-10-09
+
+# check
+set_df_TI_start_dates_all = set(df_TI_start_dates_all['sample_ID'].unique())
+
+# check if all pigs are covered.
+set_all_pigs.symmetric_difference(set_df_TI_start_dates_all)
+    # Out[69]: set()
+# => all pigs in df_master now have a TI-start date available.
+
+# save
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+file_name = 'df_TI_start_dates_all'   # formerly : 'df_date_TI_3'
+output_file = base_dir / f"{file_name}.pkl"
+df_TI_start_dates_all.to_pickle(output_file)
+
 
 # %% timestamp
 
