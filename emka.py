@@ -1828,6 +1828,156 @@ file_name = 'df_TI_start_dates_all'   # formerly : 'df_date_TI_3'
 output_file = base_dir / f"{file_name}.pkl"
 df_TI_start_dates_all.to_pickle(output_file)
 
+# read
+df_TI_start_dates_all = pd.read_pickle(output_file)
+
+
+# %%%% timetag
+
+# --- STEP 1: MERGE TI DATES INTO MASTER ---
+# Merge the clean dates into the master dataframe
+df_master = df_master.merge(df_TI_start_dates_all, on='sample_ID', how='left')
+
+# --- STEP 2: CALCULATE ELAPSED CALENDAR DAYS ---
+# We use .dt.normalize() on the timestamp to strip away the hours/minutes.
+# This ensures we are counting strict calendar days, not 24-hour periods!
+day_of_recording = df_master['timestamp'].dt.normalize()
+day_of_TI = df_master['TI_start_date'].dt.normalize()
+
+# Calculate the difference and extract the integer number of days
+df_master['days_since_TI'] = (day_of_recording - day_of_TI).dt.days
+
+#================================
+# --- STEP 3: APPLY THE NAMING CONVENTION ---
+def map_timetag(days):
+    # Handle any rows where dates might be missing (results in NaN)
+    if pd.isna(days):
+        return 'Unknown'
+        
+    days = int(days)
+    
+    if days == 0:
+        return 'TI'
+    elif 1 <= days <= 11:
+        return f'TI_{days}'
+    elif days == 12:
+        return 'Retraining_1'
+    elif days == 13:
+        return 'Retraining_2'
+    elif days == 14:
+        return 'Explantation'
+    elif days == 15:
+        return 'Implantation'
+    elif 16 <= days <= 21:
+        return f'POD_{days - 15}' # e.g., Day 16 - 15 = POD_1
+    elif days == 22:
+        return 'Sacrifice'
+    #================================
+    # Failsafe
+    elif days > 22:
+        return f'Post_Sacrifice_{days-22}' # Failsafe for extra data
+    elif days < 0:
+        return f'Pre_TI_{days}' # Failsafe for data recorded before TI
+    else:
+        return 'Unknown'
+#================================
+
+# Apply the function to create the new column
+df_master['timetag'] = df_master['days_since_TI'].apply(map_timetag)
+
+#---- VERIFICATION ---
+# Display a randomized sample of 10 rows to see the different tags in action
+preview_cols = ['sample_ID', 'timestamp', 'TI_start_date', 'days_since_TI', 'timetag']
+# if not wrapping it in : print() : the output will be jammed !
+print(df_master.dropna(subset=['days_since_TI'])[preview_cols].sample(10).to_string(index=False))
+    # sample_ID           timestamp TI_start_date  days_since_TI      timetag
+    #      ZC09 2020-07-05 01:24:11    2020-06-15             20        POD_5
+    #      ZC65 2023-08-02 17:59:40    2023-07-24              9         TI_9
+    #      ZC07 2020-06-08 11:31:07    2020-05-25             14 Explantation
+    #      ZC31 2021-03-07 23:52:54    2021-02-22             13 Retraining_2
+    #      ZC60 2023-06-05 10:43:03    2023-05-22             14 Explantation
+    #      ZC17 2020-09-15 11:29:26    2020-08-31             15 Implantation
+    #      ZC65 2023-08-10 12:56:30    2023-07-24             17        POD_2
+    #      ZC08 2020-06-08 14:49:28    2020-05-25             14 Explantation
+    #      ZC29 2021-02-16 12:57:51    2021-01-25             22    Sacrifice
+    #      ZC11 2020-07-13 07:49:42    2020-06-29             14 Explantation
+
+# another run
+    # sample_ID           timestamp TI_start_date  days_since_TI      timetag
+    #      ZC32 2021-03-08 06:11:54    2021-02-22             14 Explantation
+    #      ZC60 2023-06-05 10:04:03    2023-05-22             14 Explantation
+    #      ZC21 2020-10-18 03:08:51    2020-10-05             13 Retraining_2
+    #      ZC07 2020-06-08 10:21:06    2020-05-25             14 Explantation
+    #      ZC33 2021-03-15 11:18:27    2021-03-01             14 Explantation
+    #      ZC23 2020-11-24 21:50:35    2020-11-02             22    Sacrifice
+    #      ZC31 2021-03-09 10:32:43    2021-02-22             15 Implantation
+    #      ZC21 2020-10-22 21:10:48    2020-10-05             17        POD_2
+    #      ZC20 2020-09-10 21:01:30    2020-09-07              3         TI_3
+    #      ZC37 2021-05-03 09:41:09    2021-04-19             14 Explantation
+
+list(df_master['timetag'].unique())
+    # Out[39]: 
+    # ['TI_1',
+    #  'TI_2',
+    #  'TI_3',
+    #  'TI_4',
+    #  'TI_5',
+    #  'TI_6',
+    #  'TI_7',
+    #  'TI_8',
+    #  'TI_9',
+    #  'TI_10',
+    #  'TI_11',
+    #  'Retraining_1',
+    #  'Retraining_2',
+    #  'Explantation',
+    #  'Implantation',
+    #  'POD_1',
+    #  'POD_2',
+    #  'TI',
+    #  'POD_3',
+    #  'POD_4',
+    #  'POD_5',
+    #  'POD_6',
+    #  'Sacrifice',
+    #  'Post_Sacrifice_13',
+    #  'Post_Sacrifice_27',
+    #  'Post_Sacrifice_34',
+    #  'Post_Sacrifice_1']
+
+# Show a quick summary of how many rows exist for each timetag
+df_master['timetag'].value_counts()
+    # Out[40]: 
+    # timetag
+    # Explantation         11795
+    # Implantation          9100
+    # TI                    4064
+    # Retraining_2          3061
+    # POD_1                 2618
+    # Sacrifice             1971
+    # POD_2                 1880
+    # Retraining_1          1245
+    # POD_3                 1237
+    # POD_4                  966
+    # TI_6                   944
+    # TI_5                   943
+    # TI_1                   908
+    # TI_4                   876
+    # TI_2                   849
+    # TI_3                   840
+    # TI_7                   831
+    # TI_11                  809
+    # TI_10                  783
+    # TI_9                   765
+    # TI_8                   746
+    # POD_6                  730
+    # POD_5                  624
+    # Post_Sacrifice_27      423
+    # Post_Sacrifice_13       82
+    # Post_Sacrifice_34       36
+    # Post_Sacrifice_1        16
+    # Name: count, dtype: int64
+
 
 # %% timestamp
 
@@ -1961,7 +2111,7 @@ df_master = pd.read_pickle(source_file)
 
 # %% reorder columns
 
-ID_columns = ['sample_ID', 'setup', 'timeline', 'timestamp']
+ID_columns = ['sample_ID', 'setup', 'timetag', 'timeline', 'timestamp']
 
 cols = ID_columns + [col for col in df_master.columns
                      if col not in ID_columns
@@ -2047,23 +2197,563 @@ samples
     #  'ZC05',
     #  'ZC04']
 
-# %%'
+# %% explore
 
-df_master.iloc[:5,:4]
-    # Out[83]: 
-    #   sample_ID    setup timeline           timestamp
-    # 0      ZC69  Housing      N/A 2023-10-10 12:01:10
-    # 1      ZC69  Housing      N/A 2023-10-10 13:01:10
-    # 2      ZC69  Housing      N/A 2023-10-10 14:01:09
-    # 3      ZC69  Housing      N/A 2023-10-10 15:01:10
-    # 4      ZC69  Housing      N/A 2023-10-10 16:01:10
+df_master.iloc[:4,:6]
+    # Out[14]: 
+    #   sample_ID    setup timetag timeline           timestamp   cpu-date
+    # 0      ZC04  Housing    TI_4      N/A 2020-02-07 15:53:53  07-Feb-20
+    # 1      ZC04  Housing    TI_4      N/A 2020-02-07 15:53:53  07-Feb-20
+    # 2      ZC04  Housing    TI_4      N/A 2020-02-07 15:53:53  07-Feb-20
+    # 3      ZC04  Housing    TI_4      N/A 2020-02-07 15:53:53  07-Feb-20
 
+
+list(df_master.columns)
+    # Out[65]: 
+    # ['sample_ID',
+    #  'setup',
+    #  'timetag',
+    #  'timeline',
+    #  'timestamp',
+    #  'cpu-date',
+    #  'cpu-time',
+    #  'period-time',
+    #  'mark-label',
+    #  'step-index',
+    #  'BB__aver_(ms)',
+    #  'HR__aver_(bpm)',
+    #  'DBP__aver_(mmHg)',
+    #  'SBP__aver_(mmHg)',
+    #  'MBP__aver_(mmHg)',
+    #  'aver__aver_(°C)',
+    #  'aver__aver_(%)',
+    #  'HR__aver_(bpm)_1',
+    #  'Source_File',
+    #  'directory',
+    #  'aver__aver_(g)',
+    #  '_2',
+    #  'Abweichung in% HR vs HR',
+    #  'TI_start_date',
+    #  'days_since_TI']
+
+# %% duplicate _ HR__aver_(bpm)
+
+# removing duplicate rows : from dupicate excel files only containing data from 'HR__aver_(bpm)'.
+    # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\screenshot\duplicate
+
+df_master.shape
+    # Out[54]: (49142, 25)
+
+df_master[['BB__aver_(ms)','HR__aver_(bpm)', 'DBP__aver_(mmHg)','SBP__aver_(mmHg)','MBP__aver_(mmHg)', 'aver__aver_(°C)']][29280:29310]
+    # Out[50]: 
+    #       BB__aver_(ms) HR__aver_(bpm) DBP__aver_(mmHg) SBP__aver_(mmHg)  \
+    # 29280             0              0                0                0   
+    # 29281             0              0                0                0   
+    # 29282             0              0                0                0   
+    # 29283             0              0                0                0   
+    # 29284             0              0                0                0   
+    # 29285             0              0                0                0   
+    # 29286             0              0                0                0   
+    # 29287             0              0                0                0   
+    # 29288             0              0                0                0   
+    # 29289             0              0                0                0   
+    # 29290           562        106.763            74.85           117.95   
+    # 29291             0              0                0                0   
+    # 29292             0              0                0                0   
+    # 29293           596        100.671             73.9            118.1   
+    # 29294       598.857        100.217           75.479          119.887   
+    # 29295       587.185        102.229           76.672          120.296   
+    # 29296           NaN        165.428              NaN              NaN   
+    # 29297           NaN         252.84              NaN              NaN   
+    # 29298           NaN        248.695              NaN              NaN   
+    # 29299           NaN        243.782              NaN              NaN   
+    # 29300           NaN        239.963              NaN              NaN   
+    # 29301           NaN        231.924              NaN              NaN   
+    # 29302           NaN        196.038              NaN              NaN   
+    # 29303           NaN        159.949              NaN              NaN   
+    # 29304           NaN        169.062              NaN              NaN   
+    # 29305           NaN        217.474              NaN              NaN   
+    # 29306           NaN        207.589              NaN              NaN   
+    # 29307           NaN        186.549              NaN              NaN   
+    # 29308           NaN        147.362              NaN              NaN   
+    # 29309           NaN        197.368              NaN              NaN   
+    
+    #       MBP__aver_(mmHg) aver__aver_(°C)  
+    # 29280                0              37  
+    # 29281                0               0  
+    # 29282                0          37.031  
+    # 29283                0               0  
+    # 29284                0               0  
+    # 29285                0               0  
+    # 29286                0               0  
+    # 29287                0               0  
+    # 29288                0               0  
+    # 29289                0               0  
+    # 29290           93.515          37.146  
+    # 29291                0               0  
+    # 29292                0               0  
+    # 29293           93.277          37.219  
+    # 29294           94.664          37.254  
+    # 29295           95.802          37.284  
+    # 29296              NaN             NaN  
+    # 29297              NaN             NaN  
+    # 29298              NaN             NaN  
+    # 29299              NaN             NaN  
+    # 29300              NaN             NaN  
+    # 29301              NaN             NaN  
+    # 29302              NaN             NaN  
+    # 29303              NaN             NaN  
+    # 29304              NaN             NaN  
+    # 29305              NaN             NaN  
+    # 29306              NaN             NaN  
+    # 29307              NaN             NaN  
+    # 29308              NaN             NaN  
+    # 29309              NaN             NaN  
+
+
+# 1. Define the specific columns that act as your "junk filter"
+columns_to_check = [
+    'BB__aver_(ms)', 
+    'DBP__aver_(mmHg)',
+    'SBP__aver_(mmHg)',
+    'MBP__aver_(mmHg)', 
+    'aver__aver_(°C)'
+]
+
+# 2. Drop the rows where ALL of those specific columns are NaN
+# how='all' is the magic word here. It ensures it only drops rows missing everything in the subset.
+df_master = df_master.dropna(subset=columns_to_check, how='all').copy()
+
+df_master.shape
+    # Out[56]: (41992, 25)
+
+# Optional: Reset the index so your row numbers are clean and continuous again
+df_master = df_master.reset_index(drop=True)
+
+# %% 0
+
+# deleting '0' value rows.
+
+df_master.shape
+    # Out[33]: (41992, 26)
+
+parameter_columns = [
+    'BB__aver_(ms)',
+    'HR__aver_(bpm)',
+    'DBP__aver_(mmHg)',
+    'SBP__aver_(mmHg)',
+    'MBP__aver_(mmHg)',
+    'aver__aver_(°C)',
+    'aver__aver_(%)',
+    'HR__aver_(bpm)_1',
+    'aver__aver_(g)',   # is this important ?
+]
+
+
+# .all(axis=1) : checks whether all columns in that row are zero.
+rows_to_delete = (df_master[parameter_columns] == 0).all(axis=1)
+
+rows_to_delete.shape
+    # Out[36]: (41992,)
+
+rows_to_delete.sum()
+    # Out[37]: np.int64(0)
+
+# => non of the rows have all parameter_columns values = 0
+
+#==============================
+
+# here, this column is ignored :'aver__aver_(g)'.
+
+parameter_columns_2 = [
+    'BB__aver_(ms)',
+    'HR__aver_(bpm)',
+    'DBP__aver_(mmHg)',
+    'SBP__aver_(mmHg)',
+    'MBP__aver_(mmHg)',
+    'aver__aver_(°C)',
+    'aver__aver_(%)',
+    'HR__aver_(bpm)_1',
+]
+
+rows_to_delete_2 = (df_master[parameter_columns_2] == 0).all(axis=1)
+
+rows_to_delete_2.sum()
+    # Out[39]: np.int64(2640)
+
+df_master = df_master[~rows_to_delete_2]
+
+df_master.shape
+    # Out[41]: (39352, 26)
+
+# %% time-diff
+
+# exploring the time-diffs throught the whole dataset.
+    # how many are per-hour ?
+    # how many per-minute ?
+    # ...
+
+# 1. Sort the data to guarantee it is in perfect chronological order for each pig
+df_master = df_master.sort_values(by=['sample_ID', 'timestamp']).reset_index(drop=True)
+
+# 2. Calculate the exact time difference between consecutive rows, strictly within each pig's data
+    # The .diff() operation returns a Series with the same index as the original DataFrame, not a shorter Series. For each group:
+        # First row of each group gets NaN (since no previous row)
+        # Subsequent rows get the differences
+        # Total length = original length
+    # Index alignment: 
+        # When assigning back to df_master['time_diff'], pandas aligns by the index, not by position. 
+        # So the NaN values and differences are placed in their correct original rows.
+df_master['time_diff'] = df_master.groupby('sample_ID')['timestamp'].diff()
+
+# 3. Count how often each specific time gap occurs
+resolution_counts = df_master['time_diff'].value_counts()
+
+resolution_counts.shape
+    # Out[76]: (744,)
+
+resolution_counts[:4]
+    # Out[77]: 
+    # time_diff
+    # 0 days 00:00:59    8973
+    # 0 days 00:01:01    8944
+    # 0 days 00:01:00    5780
+    # 0 days 00:59:59    5075
+    # Name: count, dtype: int64
+
+# Round the time differences to the nearest minute ('1min' or 'min')
+rounded_diffs = df_master['time_diff'].dt.round('1min')
+
+# the first row is NaT : diff can not be calculated from any previous value.
+rounded_diffs[:10]
+    # Out[80]: 
+    # 0               NaT
+    # 1   0 days 00:00:00
+    # 2   0 days 00:00:00
+    # 3   0 days 00:00:00
+    # 4   0 days 01:00:00
+    # 5   0 days 00:00:00
+    # 6   0 days 00:00:00
+    # 7   0 days 00:00:00
+    # 8   0 days 01:00:00
+    # 9   0 days 00:00:00
+    # Name: time_diff, dtype: timedelta64[us]
+
+
+rounded_diffs.value_counts().shape
+    # Out[82]: (192,)
+
+rounded_diffs.value_counts()
+    # Out[79]: 
+    # time_diff
+    # 0 days 00:01:00    23912
+    # 0 days 01:00:00    15374
+    # 0 days 00:00:00     1634
+    # 0 days 01:01:00      212
+    # 0 days 01:02:00       38
+     
+    # 0 days 01:21:00        1
+    # 0 days 17:52:00        1
+    # 0 days 03:01:00        1
+    # 0 days 23:59:00        1
+    # 0 days 02:01:00        1
+    # Name: count, Length: 192, dtype: int64
+
+rounded_diffs.value_counts()[:10]
+    # Out[81]: 
+    # time_diff
+    # 0 days 00:01:00    23912
+    # 0 days 01:00:00    15374
+    # 0 days 00:00:00     1634
+    # 0 days 01:01:00      212
+    # 0 days 01:02:00       38
+    # 0 days 00:13:00       33
+    # 0 days 00:08:00       32
+    # 0 days 00:47:00       29
+    # 0 days 00:52:00       29
+    # 0 days 00:25:00       24
+    # Name: count, dtype: int64
+
+#=======================================================================
+#---- inspect duplicate timestamps
+
+# Extracting simultaneous records.
+
+# Find all rows that share the same sample_ID and timestamp.
+# keep=False : show us the original row AND the duplicate row.
+mask_simultaneous = df_master.duplicated(subset=['sample_ID', 'timestamp'], keep=False)
+
+# Create a dataframe of just these anomalies, sorted so the matching pairs are stacked right next to each other
+df_simultaneous = df_master[mask_simultaneous].sort_values(by=['sample_ID', 'timestamp'])
+
+df_simultaneous.shape
+    # Out[45]: (2298, 26)  :  after removing rows with all parameter-columns having '0' values.
+    # Out[17]: (2532, 26)
+
+# Choose a few relevant columns to inspect to see if the data values are identical or different
+inspect_cols = [
+    'sample_ID', 
+    'timestamp', 
+    'Source_File', 
+    'HR__aver_(bpm)', 
+    'SBP__aver_(mmHg)',
+    'aver__aver_(°C)'
+]
+
+# PREVIEW OF ZERO-DIFFERENCE PAIRS
+
+# more examples  =>  explore_emka.py  |   duplicate timestamps
+
+df_simultaneous[inspect_cols].head(10)
+    # Out[31]: 
+    #   sample_ID           timestamp                                       Source_File HR__aver_(bpm) SBP__aver_(mmHg)
+    # 0      ZC04 2020-02-07 15:53:53  zc04_0a0f_rx_front-housing_2020_02_07-9.x00.xlsb        132.788          125.356
+    # 1      ZC04 2020-02-07 15:53:53  zc04_0a0f_rx_front-housing_2020_02_07-9.x01.xlsb        132.788          125.356
+    # 2      ZC04 2020-02-07 15:53:53  zc04_0a0f_rx_front-housing_2020_02_07-9.x02.xlsb        132.788          125.356
+    # 3      ZC04 2020-02-07 15:53:53  zc04_0a0f_rx_front-housing_2020_02_07-9.x03.xlsb        132.788          125.356
+    # 4      ZC04 2020-02-07 16:53:52  zc04_0a0f_rx_front-housing_2020_02_07-9.x00.xlsb        127.771          113.238
+    # 5      ZC04 2020-02-07 16:53:52  zc04_0a0f_rx_front-housing_2020_02_07-9.x01.xlsb        127.771          113.238
+    # 6      ZC04 2020-02-07 16:53:52  zc04_0a0f_rx_front-housing_2020_02_07-9.x02.xlsb        127.771          113.238
+    # 7      ZC04 2020-02-07 16:53:52  zc04_0a0f_rx_front-housing_2020_02_07-9.x03.xlsb        127.771          113.238
+    # 8      ZC04 2020-02-07 17:53:53  zc04_0a0f_rx_front-housing_2020_02_07-9.x00.xlsb        113.823          137.825
+    # 9      ZC04 2020-02-07 17:53:53  zc04_0a0f_rx_front-housing_2020_02_07-9.x01.xlsb        113.823          137.825
+
+
+df_simultaneous[inspect_cols][-10:]
+    # after removing rows with all parameter-columns having '0' values.
+    # Out[47]: 
+    #       sample_ID           timestamp                          Source_File HR__aver_(bpm) SBP__aver_(mmHg)
+    # 32608      ZC38 2021-04-19 12:37:16  zc38_0a65_2021_april_19_01.x01.xlsb        115.088          117.398
+    # 32609      ZC38 2021-04-19 12:37:16  zc38_0a65_2021_april_19_01.x02.xlsb        115.088          117.398
+    # 32610      ZC38 2021-04-19 12:38:17  zc38_0a65_2021_april_19_01.x01.xlsb        116.262          115.048
+    # 32611      ZC38 2021-04-19 12:38:17  zc38_0a65_2021_april_19_01.x02.xlsb        116.262          115.048
+    # 32612      ZC38 2021-04-19 12:39:16  zc38_0a65_2021_april_19_01.x01.xlsb        118.724          115.388
+    # 32613      ZC38 2021-04-19 12:39:16  zc38_0a65_2021_april_19_01.x02.xlsb        118.724          115.388
+    # 32614      ZC38 2021-04-19 12:40:16  zc38_0a65_2021_april_19_01.x01.xlsb          120.4          116.829
+    # 32615      ZC38 2021-04-19 12:40:16  zc38_0a65_2021_april_19_01.x02.xlsb          120.4          116.829
+    # 32616      ZC38 2021-04-19 12:41:17  zc38_0a65_2021_april_19_01.x01.xlsb        122.454          115.195
+    # 32617      ZC38 2021-04-19 12:41:17  zc38_0a65_2021_april_19_01.x02.xlsb        122.454          115.195
+
+    #===================================================================================================================
+
+    # before removing rows with all parameter-columns having '0' values.
+        # last 6 rows :
+            # the duplicates are those with values 0 under the HR & Bp columns !
+    # Out[25]: 
+    #       sample_ID           timestamp                          Source_File HR__aver_(bpm) SBP__aver_(mmHg)
+    # 32614      ZC38 2021-04-19 12:40:16  zc38_0a65_2021_april_19_01.x01.xlsb          120.4          116.829
+    # 32615      ZC38 2021-04-19 12:40:16  zc38_0a65_2021_april_19_01.x02.xlsb          120.4          116.829
+    # 32616      ZC38 2021-04-19 12:41:17  zc38_0a65_2021_april_19_01.x01.xlsb        122.454          115.195
+    # 32617      ZC38 2021-04-19 12:41:17  zc38_0a65_2021_april_19_01.x02.xlsb        122.454          115.195
+    # 33524      ZC60 2023-06-05 14:39:03        0bb9_2023_june_05_03.x00.xlsb              0                0
+    # 33525      ZC60 2023-06-05 14:39:03   0bb9_0bb9_2023_june_05_01.x00.xlsb         71.155           76.324
+    # 33707      ZC60 2023-06-05 17:39:03        0bb9_2023_june_05_03.x00.xlsb              0                0
+    # 33708      ZC60 2023-06-05 17:39:03   0bb9_0bb9_2023_june_05_01.x00.xlsb        112.103           85.013
+    # 39886      ZC67 2023-09-16 11:03:29   zc67_2023_september_16_03.x00.xlsb         98.042           98.626
+    # 39887      ZC67 2023-09-16 11:03:29  zc63_1a2c_rx_of_2023_09_16.x00.xlsb              0                0
+
+
+# finding out how many samples-files are creating duplicates.
+df_simultaneous[['sample_ID', 'Source_File']].drop_duplicates()
+    # after removing rows with all parameter-columns having '0' values.
+    # Out[49]: 
+    #       sample_ID                                       Source_File
+    # 0          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x00.xlsb
+    # 1          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x01.xlsb
+    # 2          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x02.xlsb
+    # 3          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x03.xlsb
+    # 96         ZC04    zc04_0a0f_rx_front-housing_2020_02_08.x00.xlsb
+    #         ...                                               ...
+    # 31272      ZC36    zc36_0b73_rx_front-housing_2021_04_13.x01.xlsb
+    # 31727      ZC37               zc37_0ac5_2021_april_19_01.x01.xlsb
+    # 31728      ZC37               zc37_0ac5_2021_april_19_01.x02.xlsb
+    # 32473      ZC38               zc38_0a65_2021_april_19_01.x01.xlsb
+    # 32474      ZC38               zc38_0a65_2021_april_19_01.x02.xlsb
+    
+    # [100 rows x 2 columns]    
+
+    #===================================================================================================================
+
+    # before removing rows with all parameter-columns having '0' values.
+    # Out[21]: 
+    #       sample_ID                                       Source_File
+    # 0          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x00.xlsb
+    # 1          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x01.xlsb
+    # 2          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x02.xlsb
+    # 3          ZC04  zc04_0a0f_rx_front-housing_2020_02_07-9.x03.xlsb
+    # 96         ZC04    zc04_0a0f_rx_front-housing_2020_02_08.x00.xlsb
+    #         ...                                               ...
+    # 32474      ZC38               zc38_0a65_2021_april_19_01.x02.xlsb
+    # 33524      ZC60                     0bb9_2023_june_05_03.x00.xlsb
+    # 33525      ZC60                0bb9_0bb9_2023_june_05_01.x00.xlsb
+    # 39886      ZC67                zc67_2023_september_16_03.x00.xlsb
+    # 39887      ZC67               zc63_1a2c_rx_of_2023_09_16.x00.xlsb
+    
+    # [104 rows x 2 columns]
+
+# %%% drop duplicate rows
+
+df_master.shape
+    # Out[56]: (39352, 26)
+
+# This ensures that pandas always encounters the .x00.xlsb file first and keeps it as the "master" row, while discarding the .x01 and .x02 duplicates.
+    # This keeps your Source_File column nice and organized for tracing data back to its origin!
+df_master = df_master.sort_values(by=['sample_ID', 'timestamp', 'Source_File'])
+
+# 1. Define the specific columns that must match exactly
+duplicate_subset = [
+    'sample_ID',
+    'timestamp',
+    'HR__aver_(bpm)',
+    'MBP__aver_(mmHg)',
+    'aver__aver_(°C)'
+]
+
+# 2. Drop the duplicates
+# keep='first' tells pandas to keep the first row it finds (e.g., the .x00 file) and delete the rest
+df_master = df_master.drop_duplicates(subset=duplicate_subset, 
+                                      keep='first').copy()
+
+df_master.shape
+    # Out[60]: (38079, 26)
+
+39352 - 38079
+    # Out[61]: 1273
+
+#=================================================
+#---- time-diff : repeated 
+
+# You can re-run your time_diff calculation here to verify the '0 days' gap is gone!
+
+df_master['time_diff'] = df_master.groupby('sample_ID')['timestamp'].diff()
+
+df_master['time_diff'][:4]
+    # Out[72]: 
+    # 0                NaT
+    # 4    0 days 00:59:59
+    # 8    0 days 01:00:01
+    # 12   0 days 01:00:00
+    # Name: time_diff, dtype: timedelta64[us]
+
+# 3. Count how often each specific time gap occurs
+resolution_counts = df_master['time_diff'].value_counts()
+
+resolution_counts.shape
+    # Out[64]: (773,)
+
+resolution_counts[:10]
+    # Out[65]: 
+    # time_diff
+    # 0 days 00:00:59    8099
+    # 0 days 00:01:01    8089
+    # 0 days 00:01:00    5235
+    # 0 days 00:59:59    4972
+    # 0 days 01:00:01    4940
+    # 0 days 01:00:00    4908
+    # 0 days 00:02:00      96
+    # 0 days 00:02:01      51
+    # 0 days 00:03:00      49
+    # 0 days 00:01:59      46
+    # Name: count, dtype: int64
+
+#======================================================
+
+rounded_diffs = df_master['time_diff'].dt.round('1min')
+
+rounded_diffs.value_counts().shape
+    # Out[67]: (211,)
+
+rounded_diffs.value_counts()[:10]
+    # Out[69]: 
+    # time_diff
+    # 0 days 00:01:00    21510
+    # 0 days 01:00:00    15065
+    # 0 days 01:01:00      209
+    # 0 days 00:02:00      201
+    # 0 days 00:00:00       98  # number of rows with equal timestamps ( but different values in : "sample_ID", HR, BP, temperature ).
+    # 0 days 00:03:00       81
+    # 0 days 00:04:00       42
+    # 0 days 01:02:00       38
+    # 0 days 00:13:00       35
+    # 0 days 00:47:00       27
+    # Name: count, dtype: int64
+
+#======================================================
+#---- time duplicates : re-check
+
+# repeat the time-duplicate find-out step ran previously to check these duplicates !
+    # those duplicated rows : duplicated by these 2 columns : 'sample_ID', 'timestamp'.
+
+mask_simultaneous = df_master.duplicated(subset=['sample_ID', 'timestamp'], keep=False)
+
+# Create a dataframe of just these anomalies, sorted so the matching pairs are stacked right next to each other
+df_simultaneous = df_master[mask_simultaneous].sort_values(by=['sample_ID', 'timestamp'])
+
+df_simultaneous.shape
+    # Out[75]: (20, 26)
+
+# Choose a few relevant columns to inspect to see if the data values are identical or different
+inspect_cols = [
+    'sample_ID', 
+    'timestamp', 
+    'Source_File', 
+    'HR__aver_(bpm)', 
+    'MBP__aver_(mmHg)',
+    'aver__aver_(°C)'
+]
+
+# PREVIEW OF ZERO-DIFFERENCE PAIRS.
+# these rows have the same sample-ID & timestamps.
+    # but different values in : HR or BP or temperature.
+df_simultaneous[inspect_cols]
+    # Out[77]: 
+    #       sample_ID           timestamp                                           Source_File HR__aver_(bpm) MBP__aver_(mmHg) aver__aver_(°C)
+    # 1107       ZC04 2020-02-18 12:18:39  ZC04_0a0f_2020_february_18_01-2Implantation.x00.xlsb              0                0               0
+    # 1106       ZC04 2020-02-18 12:18:39  zc04_0a0f_rx_front-housing_2020_02_18_POD 1.x00.xlsb              0                0           36.84
+    # 5443       ZC09 2020-07-07 11:27:44                   0a11_0a11_rx_of_2020_07_07.x00.xlsb              0                0          38.774
+    # 5442       ZC09 2020-07-07 11:27:44        zc09_0a11_rx_front-housing_2020_07_06.x00.xlsb              0                0          39.047
+    # 9684       ZC15 2020-08-22 11:07:35         zc15_0a67_rx_back-housing_2020_08_22.x00.xlsb         134.61          102.479          39.059
+    # 9685       ZC15 2020-08-22 11:07:35                   zc15_0a67_rx_of_2020_08_22.x00.xlsb        156.492            99.11          39.218
+    # 30042      ZC35 2021-04-10 20:29:15        zc35_0b72_rx_front-housing_2021_04_10.x00.xlsb        137.354          108.304          37.192
+    # 30043      ZC35 2021-04-10 20:29:15        zc35_0b72_rx_front-housing_2021_04_10.x01.xlsb        137.354          108.304          37.196
+    # 30124      ZC35 2021-04-12 08:29:34        zc35_0b72_rx_front-housing_2021_04_11.x00.xlsb        162.963           87.661          37.024
+    # 30125      ZC35 2021-04-12 08:29:34        zc35_0b72_rx_front-housing_2021_04_11.x01.xlsb        162.971           87.659          37.024
+    # 30364      ZC35 2021-04-13 08:29:53        zc35_0b72_rx_front-housing_2021_04_12.x00.xlsb        276.159           99.648          35.964
+    # 30365      ZC35 2021-04-13 08:29:53        zc35_0b72_rx_front-housing_2021_04_12.x01.xlsb          257.8          100.067          36.016
+    # 30706      ZC35 2021-04-15 04:18:59        zc35_0b72_rx_front-housing_2021_04_14.x00.xlsb         98.167           89.701          35.254
+    # 30707      ZC35 2021-04-15 04:18:59        zc35_0b72_rx_front-housing_2021_04_14.x01.xlsb          98.76           89.717           35.26
+    # 30728      ZC35 2021-04-15 15:19:18        zc35_0b72_rx_front-housing_2021_04_15.x00.xlsb         85.348           81.075          35.707
+    # 30729      ZC35 2021-04-15 15:19:18        zc35_0b72_rx_front-housing_2021_04_15.x01.xlsb         85.392           81.062          35.707
+    # 31249      ZC36 2021-04-12 21:29:54        zc36_0b73_rx_front-housing_2021_04_12.x00.xlsb         96.695           60.082          36.258
+    # 31250      ZC36 2021-04-12 21:29:54        zc36_0b73_rx_front-housing_2021_04_12.x01.xlsb         96.704           60.079          36.258
+    # 31523      ZC36 2021-04-13 23:18:41        zc36_0b73_rx_front-housing_2021_04_13.x00.xlsb        160.495           40.255          36.294
+    # 31524      ZC36 2021-04-13 23:18:41        zc36_0b73_rx_front-housing_2021_04_13.x01.xlsb        155.985           40.141          36.294
+
+#================================
+#---- drop duplicates : sample_ID & timestamp
+
+df_master.shape 
+    # Out[79]: (38079, 26)
+
+df_master = df_master.drop_duplicates(subset=['sample_ID', 'timestamp'], keep='first').copy()
+
+df_master.shape 
+    # Out[81]: (38069, 26)
+
+
+38079 - 38069
+    # Out[82]: 10
+        # half od the duplicate numbers
+        # => df_simultaneous.shape
 
 # %% I/O
 
+# 7 : 'timetag' was added.
+# 8 : duplicate rows ( minute inputs ) were deleted.
+
 #---- address / name
 base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
-file_name = 'Master_Telemetry_Dataset_6'
+file_name = 'Master_Telemetry_Dataset_9'
 
 #======================================================================
 #---- save
@@ -2081,6 +2771,8 @@ df_master.to_excel(output_file, index=False)
 source_file = base_dir / f"{file_name}.pkl"
 df_master = pd.read_pickle(source_file)
 
+#==================
+# df_TI_start_dates_all   =>  top
 
 # %%'
 
