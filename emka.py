@@ -2199,6 +2199,42 @@ samples
 
 # %% explore
 
+df_master.info()
+    # <class 'pandas.DataFrame'>
+    # Index: 38069 entries, 0 to 41991
+    # Data columns (total 26 columns):
+    #  #   Column                   Non-Null Count  Dtype          
+    # ---  ------                   --------------  -----          
+    #  0   sample_ID                38069 non-null  str            
+    #  1   setup                    38069 non-null  str            
+    #  2   timetag                  38069 non-null  str            
+    #  3   timeline                 38069 non-null  str            
+    #  4   timestamp                38069 non-null  datetime64[us] 
+    #  5   cpu-date                 38069 non-null  str            
+    #  6   cpu-time                 38069 non-null  str            
+    #  7   period-time              37479 non-null  str            
+    #  8   mark-label               36435 non-null  object         
+    #  9   step-index               38069 non-null  object         
+    #  10  BB__aver_(ms)            37964 non-null  object         
+    #  11  HR__aver_(bpm)           37964 non-null  object         
+    #  12  DBP__aver_(mmHg)         37964 non-null  object         
+    #  13  SBP__aver_(mmHg)         37964 non-null  object         
+    #  14  MBP__aver_(mmHg)         37964 non-null  object         
+    #  15  aver__aver_(°C)          38068 non-null  object         
+    #  16  aver__aver_(%)           34425 non-null  object         
+    #  17  HR__aver_(bpm)_1         38069 non-null  object         
+    #  18  Source_File              38069 non-null  str            
+    #  19  directory                38069 non-null  str            
+    #  20  aver__aver_(g)           3644 non-null   object         
+    #  21  _2                       219 non-null    object         
+    #  22  Abweichung in% HR vs HR  161 non-null    object         
+    #  23  TI_start_date            38069 non-null  datetime64[us] 
+    #  24  days_since_TI            38069 non-null  int64          
+    #  25  time_diff                38027 non-null  timedelta64[us]
+    # dtypes: datetime64[us](2), int64(1), object(13), str(9), timedelta64[us](1)
+    # memory usage: 7.8+ MB
+
+
 df_master.iloc[:4,:6]
     # Out[14]: 
     #   sample_ID    setup timetag timeline           timestamp   cpu-date
@@ -2332,6 +2368,10 @@ df_master = df_master.reset_index(drop=True)
 
 # %% 0
 
+####################################################
+#---- delete
+# dete rows awith all value of parameter columns = 0.
+
 # deleting '0' value rows.
 
 df_master.shape
@@ -2385,6 +2425,16 @@ df_master = df_master[~rows_to_delete_2]
 
 df_master.shape
     # Out[41]: (39352, 26)
+
+####################################################
+#---- 0 => NaN
+
+# Convert true 0s to NaNs for the physiological columns
+for col in parameter_columns_2 :
+    # Replace 0 with NaN
+    df_master[col] = df_master[col].replace(0, pd.NA)
+    
+
 
 # %% time-diff
 
@@ -2481,7 +2531,9 @@ rounded_diffs.value_counts()[:10]
 
 # Find all rows that share the same sample_ID and timestamp.
 # keep=False : show us the original row AND the duplicate row.
-mask_simultaneous = df_master.duplicated(subset=['sample_ID', 'timestamp'], keep=False)
+mask_simultaneous = df_master.duplicated(subset=['sample_ID', 
+                                                 'timestamp'], 
+                                         keep=False)
 
 # Create a dataframe of just these anomalies, sorted so the matching pairs are stacked right next to each other
 df_simultaneous = df_master[mask_simultaneous].sort_values(by=['sample_ID', 'timestamp'])
@@ -2600,7 +2652,7 @@ df_master.shape
     # This keeps your Source_File column nice and organized for tracing data back to its origin!
 df_master = df_master.sort_values(by=['sample_ID', 'timestamp', 'Source_File'])
 
-# 1. Define the specific columns that must match exactly
+# 1. Define the specific columns that must match exactly.
 duplicate_subset = [
     'sample_ID',
     'timestamp',
@@ -2618,7 +2670,7 @@ df_master.shape
     # Out[60]: (38079, 26)
 
 39352 - 38079
-    # Out[61]: 1273
+    # Out[61]: 1273 : this number of rows were removed.
 
 #=================================================
 #---- time-diff : repeated 
@@ -2737,23 +2789,274 @@ df_master.shape
 
 df_master = df_master.drop_duplicates(subset=['sample_ID', 'timestamp'], keep='first').copy()
 
-df_master.shape 
+df_master.shape
     # Out[81]: (38069, 26)
 
 
 38079 - 38069
     # Out[82]: 10
-        # half od the duplicate numbers
+        # half of the duplicate numbers were removed.
         # => df_simultaneous.shape
+
+#================================
+#---- recheck time-diffs.
+
+df_master['time_diff'] = df_master.groupby('sample_ID')['timestamp'].diff()
+
+# 3. Count how often each specific time gap occurs
+resolution_counts = df_master['time_diff'].value_counts()
+
+resolution_counts.shape
+    # Out[18]: (772,)
+
+# time_diff is the index of the resolution_counts Series.
+resolution_counts[:20]
+    # Out[31]: 
+    # time_diff
+    # 0 days 00:00:59    8099   # 1 minute group.
+    # 0 days 00:01:01    8089
+    # 0 days 00:01:00    5235
+    ###################################
+    # 0 days 00:59:59    4972   # 1 hour group.
+    # 0 days 01:00:01    4940
+    # 0 days 01:00:00    4908
+    ####################################
+    # 0 days 00:02:00      96   # miscellaneous !
+    # 0 days 00:02:01      51
+    # 0 days 00:03:00      49
+    # 0 days 00:01:59      46
+    # 0 days 01:00:20      35
+    # 0 days 01:00:18      32
+    # 0 days 00:03:59      20
+    # 0 days 01:00:17      20
+    # 0 days 01:00:29      18
+    # 0 days 01:00:36      17
+    # 0 days 01:00:21      17
+    # 0 days 01:00:13      16
+    # 0 days 01:00:28      16
+    # 0 days 00:12:40      15
+    # Name: count, dtype: int64
+
+resolution_counts_sorted = resolution_counts.sort_index(ascending=False)
+
+resolution_counts_sorted[:10]
+    # Out[29]: 
+    # time_diff
+    # 21 days 02:17:37    1
+    # 13 days 17:46:49    1
+    # 11 days 23:16:50    1
+    # 10 days 23:05:02    1
+    # 10 days 11:42:15    1
+    # 6 days 20:35:36     1
+    # 5 days 03:00:32     1
+    # 5 days 02:40:38     1
+    # 5 days 00:52:13     1
+    # 3 days 16:45:40     1
+    # Name: count, dtype: int64
+
+resolution_counts_sorted[-10:]
+    # Out[30]: 
+    # time_diff
+    # 0 days 00:00:11    3
+    # 0 days 00:00:10    1
+    # 0 days 00:00:08    4
+    # 0 days 00:00:07    2
+    # 0 days 00:00:06    3
+    # 0 days 00:00:05    9
+    # 0 days 00:00:04    5
+    # 0 days 00:00:03    1
+    # 0 days 00:00:02    2
+    # 0 days 00:00:01    5
+    # Name: count, dtype: int64
+
+#######################################
+#---- !
+
+resolution_counts.value_counts().shape
+    # Out[24]: (31,)
+
+resolution_counts.value_counts()
+    # Out[25]: 
+    # count
+    # 1       547
+    # 2       105
+    # 3        34
+    # 4        17
+    # 5        13
+    # 14        6
+    # 6         6
+    # 8         5
+    # 7         5
+    # 10        4
+    # 9         4
+    # 12        3
+    # 20        2
+    # 17        2
+    # 16        2
+    # 13        2
+    # 8099      1
+    # 8089      1
+    # 5235      1
+    # 4972      1
+    # 4940      1
+    # 4908      1
+    # 96        1
+    # 51        1
+    # 49        1
+    # 46        1
+    # 35        1
+    # 32        1
+    # 18        1
+    # 15        1
+    # 11        1
+    # Name: count, dtype: int64
+
+###############################
+
+# Round the time differences to the nearest minute ('1min' or 'min')
+rounded_diffs = df_master['time_diff'].dt.round('1min')
+
+rounded_diffs.value_counts().shape
+    # Out[21]: (211,)
+
+rounded_diffs.value_counts()[:10]
+    # Out[22]: 
+    # time_diff
+    # 0 days 00:01:00    21510
+    # 0 days 01:00:00    15065
+    # 0 days 01:01:00      209
+    # 0 days 00:02:00      201
+    # 0 days 00:00:00       88   #  this is a product of rounding : original value is not exactly 0 !  =>  see the next section.
+    # 0 days 00:03:00       81
+    # 0 days 00:04:00       42
+    # 0 days 01:02:00       38
+    # 0 days 00:13:00       35
+    # 0 days 00:47:00       27
+    # Name: count, dtype: int64
+
+###########
+# check for duplicate timestamps.
+mask_simultaneous = df_master.duplicated(subset=['sample_ID', 'timestamp'], keep=False)
+
+# Create a dataframe of just these anomalies, sorted so the matching pairs are stacked right next to each other
+df_simultaneous = df_master[mask_simultaneous].sort_values(by=['sample_ID', 'timestamp'])
+
+df_simultaneous.shape
+    # Out[23]: (0, 26)  #  no duplicate timestamps.
+
+# %% delete columns
+
+# delete junk columns.
+
+df_master.shape
+    # Out[36]: (38069, 26)
+
+# 1. Create a list of the exact column names to delete
+junk_columns = [
+    'HR__aver_(bpm)_1',
+    'aver__aver_(g)',
+    '_2',
+    'Abweichung in% HR vs HR'
+]
+
+# 2. Drop them from the dataframe
+# Using errors='ignore' is a great safety measure. It tells pandas: 
+# "If one of these columns is already gone, just ignore it and don't crash."
+df_master = df_master.drop(columns=junk_columns, errors='ignore')
+
+df_master.shape
+    # Out[42]: (38069, 22)
+
+df_master.info()
+    # <class 'pandas.DataFrame'>
+    # Index: 38069 entries, 0 to 41991
+    # Data columns (total 22 columns):
+    #  #   Column            Non-Null Count  Dtype          
+    # ---  ------            --------------  -----          
+    #  0   sample_ID         38069 non-null  str            
+    #  1   setup             38069 non-null  str            
+    #  2   timetag           38069 non-null  str            
+    #  3   timeline          38069 non-null  str            
+    #  4   timestamp         38069 non-null  datetime64[us] 
+    #  5   cpu-date          38069 non-null  str            
+    #  6   cpu-time          38069 non-null  str            
+    #  7   period-time       37479 non-null  str            
+    #  8   mark-label        36435 non-null  object         
+    #  9   step-index        38069 non-null  object         
+    #  10  BB__aver_(ms)     29790 non-null  object         
+    #  11  HR__aver_(bpm)    29790 non-null  object         
+    #  12  DBP__aver_(mmHg)  29789 non-null  object         
+    #  13  SBP__aver_(mmHg)  29790 non-null  object         
+    #  14  MBP__aver_(mmHg)  29790 non-null  object         
+    #  15  aver__aver_(°C)   36705 non-null  object         
+    #  16  aver__aver_(%)    34424 non-null  object         
+    #  17  Source_File       38069 non-null  str            
+    #  18  directory         38069 non-null  str            
+    #  19  TI_start_date     38069 non-null  datetime64[us] 
+    #  20  days_since_TI     38069 non-null  int64          
+    #  21  time_diff         38027 non-null  timedelta64[us]
+    # dtypes: datetime64[us](2), int64(1), object(9), str(9), timedelta64[us](1)
+    # memory usage: 6.7+ MB
+
+# %% down-re-sample
+
+# 1. Dynamically build an aggregation dictionary of functions :
+    # 2 functions : mean , first.
+# This tells pandas: "If it's a number, average it. If it's text, keep the first one."
+# first :
+    # 'first' is a built-in pandas aggregation command.
+    # "Look at all the rows inside this 1-hour bucket. 
+        # Just grab the top-most value you see and throw the rest away."
+agg_dict = {}
+for col in df_master.columns:
+    # Skip the grouping columns
+    if col in ['sample_ID', 'timestamp']:
+        continue
+    # If the column is numeric (HR, BP, Temp, days_since_TI), calculate the mean
+    elif pd.api.types.is_numeric_dtype(df_master[col]):
+        agg_dict[col] = 'mean'
+    # If the column is text (timetag, setup, Source_File), take the first entry in that hour
+    else:
+        agg_dict[col] = 'first'
+
+print("Regularizing timestamps to the top of the hour...")
+
+# just to be able to compare it later to the new dataframe.
+df_master_original_timestamp = df_master.copy()
+
+# 2. Perform the grouping and downsampling
+# freq='1h' creates strict 1-hour buckets starting exactly at the top of the hour (e.g., 01:00:00)
+# grouping :
+    # First, isolate the data by the individual pig (sample_ID).
+    # Then, within that specific pig's data, group it further into 1-hour time buckets (pd.Grouper(...)).
+df_master = df_master_original_timestamp.groupby(by=['sample_ID', 
+                                                     pd.Grouper(key='timestamp', 
+                                                                freq='1h'
+                                                                )
+                                                     ]
+                                                 ).agg(agg_dict).reset_index()
+
+
+# 3. Verification Report
+print("\n--- DOWNSAMPLING COMPLETE ---")
+print(f"Original rows: {len(df_master)}")
+print(f"New hourly rows: {len(df_master)}")
+
+print("\nPreview of the regularized 1-hour data:")
+preview_cols = ['sample_ID', 'timestamp', 'timetag', 'HR__aver_(bpm)', 'MBP__aver_(mmHg)']
+print(df_master[preview_cols].head(10).to_string(index=False))
 
 # %% I/O
 
 # 7 : 'timetag' was added.
 # 8 : duplicate rows ( minute inputs ) were deleted.
+# 10 : 
+    # 0 => NaN
+    # delete the junk columns.
 
 #---- address / name
 base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
-file_name = 'Master_Telemetry_Dataset_9'
+file_name = 'Master_Telemetry_Dataset_10'
 
 #======================================================================
 #---- save
