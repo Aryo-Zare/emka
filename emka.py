@@ -2272,9 +2272,31 @@ list(df_master.columns)
     #  'TI_start_date',
     #  'days_since_TI']
 
+#===============================
+#---- N/A timeline
+
+# do not wonder why some values under the column 'timeline' is N/A.
+    # while the corresponding values under the column 'timetag' exist.
+    # not every 'timeline' was input by the data acquisitors.
+
+df_master['timeline'].unique()
+    # Out[81]: 
+    # <StringArray>
+    # ['N/A', 'TI', 'Retraining_1', 'Retraining_2', 'Explantation', 'Implantation', 'POD 1', 'POD 3', 'POD 4', 'Sacrifice']
+    # Length: 10, dtype: str
+
+
+df_master[['timetag','timeline']][:4]
+    # Out[82]: 
+    #   timetag timeline
+    # 0    TI_4      N/A
+    # 1    TI_4      N/A
+    # 2    TI_4      N/A
+    # 3    TI_4      N/A
+
 # %% duplicate _ HR__aver_(bpm)
 
-# removing duplicate rows : from dupicate excel files only containing data from 'HR__aver_(bpm)'.
+# removing duplicate rows : from duplicate excel files only containing data from 'HR__aver_(bpm)'.
     # F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\screenshot\duplicate
 
 df_master.shape
@@ -2951,21 +2973,7 @@ df_simultaneous.shape
 df_master.shape
     # Out[36]: (38069, 26)
 
-# 1. Create a list of the exact column names to delete
-junk_columns = [
-    'HR__aver_(bpm)_1',
-    'aver__aver_(g)',
-    '_2',
-    'Abweichung in% HR vs HR'
-]
 
-# 2. Drop them from the dataframe
-# Using errors='ignore' is a great safety measure. It tells pandas: 
-# "If one of these columns is already gone, just ignore it and don't crash."
-df_master = df_master.drop(columns=junk_columns, errors='ignore')
-
-df_master.shape
-    # Out[42]: (38069, 22)
 
 df_master.info()
     # <class 'pandas.DataFrame'>
@@ -2998,9 +3006,122 @@ df_master.info()
     # dtypes: datetime64[us](2), int64(1), object(9), str(9), timedelta64[us](1)
     # memory usage: 6.7+ MB
 
+
+
+# 1. Create a list of the exact column names to delete
+junk_columns = [
+    'HR__aver_(bpm)_1',
+    'aver__aver_(g)',
+    '_2',
+    'Abweichung in% HR vs HR',
+    'cpu-date', 
+    'cpu-time', 
+    'time_diff', # Aggregating time_diff makes no sense because the time difference between your new rows will automatically be exactly 1 hour.
+    'period-time', 
+    'mark-label', 
+    'step-index'
+]
+
+# 2. Drop them from the dataframe
+# Using errors='ignore' is a great safety measure. It tells pandas: 
+# "If one of these columns is already gone, just ignore it and don't crash."
+df_master = df_master.drop(columns=junk_columns, errors='ignore')
+
+df_master.shape
+    # Out[42]: (38069, 17)
+
+#---- type-cast : object => numeric
+
+df_master.info()
+    # <class 'pandas.DataFrame'>
+    # Index: 38069 entries, 0 to 41991
+    # Data columns (total 17 columns):
+    #  #   Column            Non-Null Count  Dtype         
+    # ---  ------            --------------  -----         
+    #  0   sample_ID         38069 non-null  str           
+    #  1   setup             38069 non-null  str           
+    #  2   timetag           38069 non-null  str           
+    #  3   timeline          38069 non-null  str           
+    #  4   timestamp         38069 non-null  datetime64[us]
+    #  5   cpu-date          38069 non-null  str           
+    #  6   BB__aver_(ms)     29790 non-null  object        
+    #  7   HR__aver_(bpm)    29790 non-null  object        
+    #  8   DBP__aver_(mmHg)  29789 non-null  object        
+    #  9   SBP__aver_(mmHg)  29790 non-null  object        
+    #  10  MBP__aver_(mmHg)  29790 non-null  object        
+    #  11  aver__aver_(°C)   36705 non-null  object        
+    #  12  aver__aver_(%)    34424 non-null  object        
+    #  13  Source_File       38069 non-null  str           
+    #  14  directory         38069 non-null  str           
+    #  15  TI_start_date     38069 non-null  datetime64[us]
+    #  16  days_since_TI     38069 non-null  int64         
+    # dtypes: datetime64[us](2), int64(1), object(7), str(7)
+    # memory usage: 5.2+ MB
+
+'''
+    Why are physiological columns showing as object?
+    In pandas, the object dtype usually means "text string."
+    
+    When you import data from hundreds of messy Excel files, 
+        if even one single cell in the HR__aver_(bpm) column contains a non-number 
+        (like a blank space " ", a dash "-", or a machine error code like "Error"), pandas panics. 
+        To prevent the data from breaking, pandas imports the entire column as text (object) to accommodate that one rogue character.
+    
+    Why this matters right now: 
+            If you try to run the .agg('mean') function on an object column, pandas will either throw an error or silently skip it.
+    The Fix: We must force these columns into float (decimal numbers) before we do the downsampling. 
+        We can do this using pd.to_numeric(..., errors='coerce'), which turns the numbers into floats and turns any rogue text into safe NaN blanks.
+
+'''
+
+# physiological columns ( of interest )
+phys_cols = [
+    'BB__aver_(ms)',
+    'HR__aver_(bpm)',
+    'DBP__aver_(mmHg)',
+    'SBP__aver_(mmHg)',
+    'MBP__aver_(mmHg)',
+    'aver__aver_(°C)',
+    'aver__aver_(%)'
+]
+
+# Converting physiological data to numeric floats.
+for col in phys_cols:
+    df_master[col] = pd.to_numeric(df_master[col], errors='coerce')
+
+df_master.info()
+    # <class 'pandas.DataFrame'>
+    # Index: 38069 entries, 0 to 41991
+    # Data columns (total 16 columns):
+    #  #   Column            Non-Null Count  Dtype         
+    # ---  ------            --------------  -----         
+    #  0   sample_ID         38069 non-null  str           
+    #  1   setup             38069 non-null  str           
+    #  2   timetag           38069 non-null  str           
+    #  3   timeline          38069 non-null  str           
+    #  4   timestamp         38069 non-null  datetime64[us]
+    #  5   BB__aver_(ms)     29790 non-null  float64       
+    #  6   HR__aver_(bpm)    29790 non-null  float64       
+    #  7   DBP__aver_(mmHg)  29789 non-null  float64       
+    #  8   SBP__aver_(mmHg)  29790 non-null  float64       
+    #  9   MBP__aver_(mmHg)  29790 non-null  float64       
+    #  10  aver__aver_(°C)   36705 non-null  float64       
+    #  11  aver__aver_(%)    34424 non-null  float64       
+    #  12  Source_File       38069 non-null  str           
+    #  13  directory         38069 non-null  str           
+    #  14  TI_start_date     38069 non-null  datetime64[us]
+    #  15  days_since_TI     38069 non-null  int64         
+    # dtypes: datetime64[us](2), float64(7), int64(1), str(6)
+    # memory usage: 4.9 MB
+
+
 # %% down-re-sample
 
-# 1. Dynamically build an aggregation dictionary of functions :
+df_master.shape
+    # Out[31]: (38069, 16)
+
+#---- dictionary of functions
+# Dynamically build an aggregation dictionary of functions :
     # 2 functions : mean , first.
 # This tells pandas: "If it's a number, average it. If it's text, keep the first one."
 # first :
@@ -3012,23 +3133,23 @@ for col in df_master.columns:
     # Skip the grouping columns
     if col in ['sample_ID', 'timestamp']:
         continue
-    # If the column is numeric (HR, BP, Temp, days_since_TI), calculate the mean
-    elif pd.api.types.is_numeric_dtype(df_master[col]):
+    # If it is a phyiological column, calculate the mean
+    elif col in phys_cols:
         agg_dict[col] = 'mean'
     # If the column is text (timetag, setup, Source_File), take the first entry in that hour
     else:
         agg_dict[col] = 'first'
 
-print("Regularizing timestamps to the top of the hour...")
-
 # just to be able to compare it later to the new dataframe.
 df_master_original_timestamp = df_master.copy()
 
-# 2. Perform the grouping and downsampling
+#====================================================================================
+#---- down-re-sample
+# Perform the grouping and downsampling
 # freq='1h' creates strict 1-hour buckets starting exactly at the top of the hour (e.g., 01:00:00)
 # grouping :
     # First, isolate the data by the individual pig (sample_ID).
-    # Then, within that specific pig's data, group it further into 1-hour time buckets (pd.Grouper(...)).
+    # Then, within that specific pig's data, group it further into 1-hour time buckets (pd.Grouper(...))( = re-sample , regularization ).
 df_master = df_master_original_timestamp.groupby(by=['sample_ID', 
                                                      pd.Grouper(key='timestamp', 
                                                                 freq='1h'
@@ -3036,15 +3157,264 @@ df_master = df_master_original_timestamp.groupby(by=['sample_ID',
                                                      ]
                                                  ).agg(agg_dict).reset_index()
 
+#====================================================================================
+# Verification Report
 
-# 3. Verification Report
-print("\n--- DOWNSAMPLING COMPLETE ---")
-print(f"Original rows: {len(df_master)}")
-print(f"New hourly rows: {len(df_master)}")
+df_master.shape
+    # Out[30]: (16226, 16)
 
-print("\nPreview of the regularized 1-hour data:")
 preview_cols = ['sample_ID', 'timestamp', 'timetag', 'HR__aver_(bpm)', 'MBP__aver_(mmHg)']
-print(df_master[preview_cols].head(10).to_string(index=False))
+
+df_master[preview_cols][:4]
+    # Out[33]: 
+    #   sample_ID           timestamp timetag  HR__aver_(bpm)  MBP__aver_(mmHg)
+    # 0      ZC04 2020-02-07 15:00:00    TI_4      132.788000        117.624000
+    # 1      ZC04 2020-02-07 16:00:00    TI_4      127.771000        106.015000
+    # 2      ZC04 2020-02-07 17:00:00    TI_4      113.823000        128.930000
+    # 3      ZC04 2020-02-07 18:00:00    TI_4      123.002000        114.023000
+
+df_master[preview_cols][1000:1004]
+    # Out[34]: 
+    #      sample_ID           timestamp timetag  HR__aver_(bpm)  MBP__aver_(mmHg)
+    # 1000      ZC07 2020-06-13 12:00:00   POD_4      115.130000         85.628000
+    # 1001      ZC07 2020-06-13 13:00:00   POD_4      215.535667         58.838667
+    # 1002      ZC07 2020-06-13 14:00:00   POD_4      120.956000         86.434000
+    # 1003      ZC07 2020-06-13 15:00:00   POD_4      113.916000         90.711000
+
+df_master[preview_cols][-4:]
+    # Out[35]: 
+    #       sample_ID           timestamp timetag  HR__aver_(bpm)  MBP__aver_(mmHg)
+    # 16222      ZC69 2023-10-26 10:00:00   POD_2       93.704000         92.649000
+    # 16223      ZC69 2023-10-26 11:00:00   POD_2       95.267857         90.756857
+    # 16224      ZC69 2023-10-26 12:00:00   POD_2             NaN               NaN
+    # 16225      ZC69 2023-10-26 13:00:00   POD_2      151.515000        177.322000
+
+# %% matrix
+
+# Data Overview Matrix
+
+#===================================================================
+#---- sample matrix
+
+# number of individual samples ( pigs ) in each setup-timetag intersection.
+# Create the pivot table
+overview_matrix_sample = pd.pivot_table(
+    df_master,                   # Use your newly regularized dataset
+    values='sample_ID',          # The column we want to count
+    index='timetag',             # Rows of the matrix
+    columns='setup',             # Columns of the matrix
+    aggfunc='nunique',           # 'nunique' counts the number of unique pigs!
+    fill_value=0                 # Replaces empty intersections with 0 instead of NaN
+)
+
+# problem : the index ( timetag ) isnot chronologically ordred.
+overview_matrix_sample
+    # Out[41]: 
+    # setup              Housing  OF  Stoffwechselkäfig  Surgery
+    # timetag                                                   
+    # Explantation            33   1                  4       36
+    # Implantation            33   5                  0       27
+    # POD_1                   33  22                  0        1
+    # POD_2                   32   5                  0        4
+    # POD_3                   29  24                  0        1
+    # POD_4                   28  18                  0        0
+    # POD_5                   28   0                  0        0
+    # POD_6                   24   3                  0        3
+    # Post_Sacrifice_13        0   0                  0        1
+    # Post_Sacrifice_27        0   0                  0        1
+    # Post_Sacrifice_34        0   0                  0        1
+    # Retraining_1            34  28                  0        0
+    # Retraining_2            32  28                  4        1
+    # Sacrifice               20  14                  0       19
+    # TI                      31   0                  0       35
+    # TI_1                    34   0                  0        2
+    # TI_10                   33   0                  0        0
+    # TI_11                   34   0                  0        0
+    # TI_2                    32   0                  0        2
+    # TI_3                    34   0                  0        0
+    # TI_4                    35   0                  0        0
+    # TI_5                    35   0                  0        0
+    # TI_6                    35   0                  0        0
+    # TI_7                    34   0                  0        0
+    # TI_8                    30   0                  0        0
+    # TI_9                    32   0                  0        0
+
+#=================================================
+#---- chronological order of 'timetag'
+df_tag_order = df_master[['timetag','days_since_TI']].drop_duplicates().sort_values(by=['days_since_TI'])
+
+df_tag_order
+    # Out[46]: 
+    #                  timetag  days_since_TI
+    # 424                   TI              0
+    # 438                 TI_1              1
+    # 592                 TI_2              2
+    # 606                 TI_3              3
+    # 0                   TI_4              4
+    # 9                   TI_5              5
+    # 33                  TI_6              6
+    # 55                  TI_7              7
+    # 79                  TI_8              8
+    # 103                 TI_9              9
+    # 126                TI_10             10
+    # 150                TI_11             11
+    # 174         Retraining_1             12
+    # 198         Retraining_2             13
+    # 222         Explantation             14
+    # 246         Implantation             15
+    # 270                POD_1             16
+    # 294                POD_2             17
+    # 318                POD_3             18
+    # 342                POD_4             19
+    # 366                POD_5             20
+    # 390                POD_6             21
+    # 414            Sacrifice             22
+    # 14067  Post_Sacrifice_13             35
+    # 14069  Post_Sacrifice_27             49
+    # 14077  Post_Sacrifice_34             56
+
+# 1. Extract the sorted list of timetags from your ordering dataframe
+list_ordered_timetags = df_tag_order['timetag'].tolist()
+
+list_ordered_timetags
+    # Out[66]: 
+    # ['TI',
+    #  'TI_1',
+    #  'TI_2',
+    #  'TI_3',
+    #  'TI_4',
+    #  'TI_5',
+    #  'TI_6',
+    #  'TI_7',
+    #  'TI_8',
+    #  'TI_9',
+    #  'TI_10',
+    #  'TI_11',
+    #  'Retraining_1',
+    #  'Retraining_2',
+    #  'Explantation',
+    #  'Implantation',
+    #  'POD_1',
+    #  'POD_2',
+    #  'POD_3',
+    #  'POD_4',
+    #  'POD_5',
+    #  'POD_6',
+    #  'Sacrifice',
+    #  'Post_Sacrifice_13',
+    #  'Post_Sacrifice_27',
+    #  'Post_Sacrifice_34']
+
+# 2. Filter the list to only include tags that actually exist in the matrix's index
+# (This is a safety measure to prevent pandas from adding blank rows if a tag is missing)
+valid_ordered_timetags = [tag 
+                          for tag in list_ordered_timetags 
+                          if tag in overview_matrix_sample.index]
+
+# 3. Apply the specific order to the index (rows) of the matrix
+overview_matrix_sample = overview_matrix_sample.loc[valid_ordered_timetags]
+
+# the matrix with the index (timetag) with chronological order.
+overview_matrix_sample
+    # Out[50]: 
+    # setup              Housing  OF  Stoffwechselkäfig  Surgery
+    # timetag                                                   
+    # TI                      31   0                  0       35
+    # TI_1                    34   0                  0        2
+    # TI_2                    32   0                  0        2
+    # TI_3                    34   0                  0        0
+    # TI_4                    35   0                  0        0
+    # TI_5                    35   0                  0        0
+    # TI_6                    35   0                  0        0
+    # TI_7                    34   0                  0        0
+    # TI_8                    30   0                  0        0
+    # TI_9                    32   0                  0        0
+    # TI_10                   33   0                  0        0
+    # TI_11                   34   0                  0        0
+    # Retraining_1            34  28                  0        0
+    # Retraining_2            32  28                  4        1
+    # Explantation            33   1                  4       36
+    # Implantation            33   5                  0       27
+    # POD_1                   33  22                  0        1
+    # POD_2                   32   5                  0        4
+    # POD_3                   29  24                  0        1
+    # POD_4                   28  18                  0        0
+    # POD_5                   28   0                  0        0
+    # POD_6                   24   3                  0        3
+    # Sacrifice               20  14                  0       19
+    # Post_Sacrifice_13        0   0                  0        1
+    # Post_Sacrifice_27        0   0                  0        1
+    # Post_Sacrifice_34        0   0                  0        1
+
+#---- save
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER\matrix")
+file_name = 'overview_matrix_sample'
+overview_matrix_sample.to_pickle( base_dir / f"{file_name}.pkl" )
+overview_matrix_sample.to_excel( base_dir / f"{file_name}.xlsx" )
+
+
+#=================================================
+#---- volume
+
+# TOTAL RECORDED HOURS PER SETUP & TIMETAG
+
+# Since your dataset is now perfectly downsampled to 1-hour intervals, 
+    # counting the number of rows is mathematically identical to counting the total hours of recorded data.
+
+# 1. Create the pivot table using 'count' to get the number of rows
+volume_matrix = pd.pivot_table(
+    df_master,
+    values='sample_ID',          # We can still count the ID column, but now it counts every instance
+    index='timetag',             # Keeping your preferred orientation
+    columns='setup',
+    aggfunc='count',             # <--- The magic change: counts total rows instead of unique pigs
+    fill_value=0
+)
+
+# 2. Re-apply your chronological sorting
+valid_ordered_timetags_volume = [tag 
+                                 for tag in list_ordered_timetags 
+                                 if tag in volume_matrix.index]
+volume_matrix = volume_matrix.loc[valid_ordered_timetags_volume]
+
+# TOTAL RECORDED HOURS PER SETUP & TIMETAG.
+volume_matrix
+    # Out[69]: 
+    # setup              Housing  OF  Stoffwechselkäfig  Surgery
+    # timetag                                                   
+    # TI                     335   0                  0       99
+    # TI_1                   734   0                  0       48
+    # TI_2                   724   0                  0       32
+    # TI_3                   788   0                  0        0
+    # TI_4                   823   0                  0        0
+    # TI_5                   813   0                  0        0
+    # TI_6                   804   0                  0        0
+    # TI_7                   738   0                  0        0
+    # TI_8                   710   0                  0        0
+    # TI_9                   733   0                  0        0
+    # TI_10                  746   0                  0        0
+    # TI_11                  783   0                  0        0
+    # Retraining_1           764  29                  0        0
+    # Retraining_2           641  29                 60       15
+    # Explantation           535   1                 31      178
+    # Implantation           644   5                  0      125
+    # POD_1                  743  23                  0        2
+    # POD_2                  703   5                  0        8
+    # POD_3                  645  24                  0        2
+    # POD_4                  650  19                  0        0
+    # POD_5                  611   0                  0        0
+    # POD_6                  509   3                  0        3
+    # Sacrifice              254  15                  0       29
+    # Post_Sacrifice_13        0   0                  0        2
+    # Post_Sacrifice_27        0   0                  0        8
+    # Post_Sacrifice_34        0   0                  0        1
+
+#---- save
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER\matrix")
+file_name = 'volume_matrix'
+volume_matrix.to_pickle( base_dir / f"{file_name}.pkl" )
+volume_matrix.to_excel( base_dir / f"{file_name}.xlsx" )
+
 
 # %% I/O
 
@@ -3053,10 +3423,14 @@ print(df_master[preview_cols].head(10).to_string(index=False))
 # 10 : 
     # 0 => NaN
     # delete the junk columns.
+# 11 : 
+        # junk columns removed.
+        # physiological columns : type-casting : object => numeric
+        # down-re-sampling
 
 #---- address / name
 base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
-file_name = 'Master_Telemetry_Dataset_10'
+file_name = 'Master_Telemetry_Dataset_11'
 
 #======================================================================
 #---- save
