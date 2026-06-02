@@ -1,5 +1,5 @@
 
-# %%
+# %%'
 
 file_path = r'F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC09\EMKA\Housing\zc09_0a11_rx_front-housing_2020_06_16.x00.xlsb'
 df_test = pd.read_excel(file_path)
@@ -21,16 +21,16 @@ df_test.head()
     
     # [5 rows x 20 columns]
 
-# %%
+# %%'
 
 df_test[0] == 'cpu-date'
     # KeyError: 0
 
-# %%
+# %%'
 
 step_matches = df_test[df_test[0].astype(str).str.contains('steps section', case=False, na=False)].index
 
-# %%
+# %%'
 
 df_raw_0.shape
     # Out[17]: (249, 20)
@@ -299,7 +299,7 @@ col_matches[col_matches]
 # column index
 cpu_date_col_idx = col_matches[col_matches].index[0]
 
-# %%
+# %%'
 
 # explore
 
@@ -309,7 +309,7 @@ header_idx
 cpu_date_col_idx
     # Out[60]: np.int64(2)
 
-# %%
+# %%'
 
 df_below_header = df_raw_0.iloc[header_idx + 1:]
 
@@ -340,7 +340,7 @@ empty_indices
     # Out[78]: Index([209, 234, 235, 237, 238, 240, 241, 244, 246, 247, 248], dtype='int64')
 
 
-# %%
+# %%'
 
 # after running the mani program on a test file, with the corrected dnd-index :
 final_dataset.iloc[:6,:6]
@@ -353,7 +353,7 @@ final_dataset.iloc[:6,:6]
     # 4      44306  0.703449    0.124997    housing          4  654.305
     # 5      44306  0.745116    0.166664    housing          5  624.076
 
-# %%
+# %%'
 
 # practice : .loc
 
@@ -367,7 +367,7 @@ df.loc[["viper", "sidewinder"] , "shield" ]
 
 
 
-# %%
+# %%'
 
 
 # %% explore original column names
@@ -608,5 +608,137 @@ df_simultaneous[inspect_cols][-1010:-1000]
     # 19346      ZC26 2020-11-09 16:13:37    zc26_0ae4_rx_front-housing_2020_11_09.x01.xlsb        146.827          114.671          36.859
 
 
-# %%
+# %%'
+
+# 11
+list(df_master.columns)
+    # Out[13]: 
+    # ['sample_ID',
+    #  'timestamp',
+    #  'setup',
+    #  'timetag',
+    #  'timeline',
+    #  'BB__aver_(ms)',
+    #  'HR__aver_(bpm)',
+    #  'DBP__aver_(mmHg)',
+    #  'SBP__aver_(mmHg)',
+    #  'MBP__aver_(mmHg)',
+    #  'aver__aver_(°C)',
+    #  'aver__aver_(%)',
+    #  'Source_File',
+    #  'directory',
+    #  'TI_start_date',
+    #  'days_since_TI']
+
+# %% err__
+
+# %%% post-sacrifice
+
+mask_post_sacrifice = df_master['days_since_TI'] > 22
+df_post_sacrifice = df_master[mask_post_sacrifice]
+df_post_sacrifice
+    # Out[19]: 
+    #       sample_ID           timestamp    setup            timetag timeline  BB__aver_(ms)  HR__aver_(bpm)  DBP__aver_(mmHg)  SBP__aver_(mmHg)  MBP__aver_(mmHg)  \
+    # 14067      ZC64 2023-08-21 13:00:00  Surgery  Post_Sacrifice_13      N/A     666.461133       96.739733         51.390267         86.539867         66.121267   
+    # 14068      ZC64 2023-08-21 14:00:00  Surgery  Post_Sacrifice_13      N/A     653.043649       93.807491         53.534333         95.839193         71.817877   
+    # 14069      ZC64 2023-09-04 08:00:00  Surgery  Post_Sacrifice_27      N/A     595.207529      103.628000         48.645235         71.106941         58.801412   
+    # 14070      ZC64 2023-09-04 09:00:00  Surgery  Post_Sacrifice_27      N/A     702.243169       98.352864         62.390254         88.781169         73.526847   
+    # 14071      ZC64 2023-09-04 10:00:00  Surgery  Post_Sacrifice_27      N/A     707.271508       93.272017         55.503492         81.216339         66.546763   
+    # 14072      ZC64 2023-09-04 11:00:00  Surgery  Post_Sacrifice_27      N/A     609.266767       99.266817         62.233467         94.359633         76.431867   
+    # 14073      ZC64 2023-09-04 12:00:00  Surgery  Post_Sacrifice_27      N/A     638.315650       96.435017         62.837050         95.538233         77.096550   
+    # 14074      ZC64 2023-09-04 13:00:00  Surgery  Post_Sacrifice_27      N/A     623.082200      115.559783         62.642467         93.188500         75.668650   
+    # 14075      ZC64 2023-09-04 14:00:00  Surgery  Post_Sacrifice_27      N/A     573.933217      126.587467         76.899517        111.443583         92.409283   
+    # 14076      ZC64 2023-09-04 15:00:00  Surgery  Post_Sacrifice_27      N/A     518.287356      138.945644         75.823978        109.951022         91.381400   
+    # 14077      ZC64 2023-09-11 12:00:00  Surgery  Post_Sacrifice_34      N/A     855.690067       72.667433         39.609400         64.483733         49.739433   
+    
+    #        aver__aver_(°C)  aver__aver_(%)                              Source_File                                                              directory  \
+    # 14067        33.412571       99.888040     zc64_1a2d_2023_august_21_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14068        34.314298       99.969228   zc64_1a2d_2023_august_21_01-2.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14069        35.417176       97.003706  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14070        35.925317       81.784733  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14071        36.321817       89.017200  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14072        35.941283       99.802783  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14073        35.993833       99.167917  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14074        36.112650       94.907217  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14075        36.277600       87.502350  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14076        36.073870       95.255783  zc64_1a2d_2023_september_04_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    # 14077        36.127353       97.396944  zc64_1a2d_2023_september_11_01.x00.xlsb  F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\ZC64\EMKA\OR   
+    
+    #       TI_start_date  days_since_TI  
+    # 14067    2023-07-17             35  
+    # 14068    2023-07-17             35  
+    # 14069    2023-07-17             49  
+    # 14070    2023-07-17             49  
+    # 14071    2023-07-17             49  
+    # 14072    2023-07-17             49  
+    # 14073    2023-07-17             49  
+    # 14074    2023-07-17             49  
+    # 14075    2023-07-17             49  
+    # 14076    2023-07-17             49  
+    # 14077    2023-07-17             56  
+
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER\check")
+file_name = 'post_sacrifice'
+df_post_sacrifice.to_excel( base_dir / f"{file_name}.xlsx" )  # index=False
+
+# %%%'
+
+mask_post_surgery_TI_1 = ( df_master['setup'] == 'Surgery' ) & ( df_master['timetag'] == 'TI_1' )
+df_post_surgery_TI_1 = df_master[mask_post_surgery_TI_1 ]
+df_post_surgery_TI_1.shape
+    # Out[29]: (48, 16)]
+
+df_post_surgery_TI_1
+
+# %% read
+
+base_dir = Path(r"F:\OneDrive - Uniklinik RWTH Aachen\EMKA\data\copy_excel\MASTER")
+file_name = 'Master_Telemetry_Dataset_10'
+source_file = base_dir / f"{file_name}.pkl"
+df_master_10 = pd.read_pickle(source_file)
+
+
+df_master_10.shape
+    # Out[24]: (38069, 22)
+
+df_master_10['timestamp'][:4]
+    # Out[33]: 
+    # 0    2020-02-07 15:53:53
+    # 4    2020-02-07 16:53:52
+    # 8    2020-02-07 17:53:53
+    # 12   2020-02-07 18:53:53
+    # Name: timestamp, dtype: datetime64[us]
+
+list(df_master_10.columns)
+    # Out[26]: 
+    # ['sample_ID',
+    #  'setup',
+    #  'timetag',
+    #  'timeline',
+    #  'timestamp',
+    #  'cpu-date',
+    #  'cpu-time',
+    #  'period-time',
+    #  'mark-label',
+    #  'step-index',
+    #  'BB__aver_(ms)',
+    #  'HR__aver_(bpm)',
+    #  'DBP__aver_(mmHg)',
+    #  'SBP__aver_(mmHg)',
+    #  'MBP__aver_(mmHg)',
+    #  'aver__aver_(°C)',
+    #  'aver__aver_(%)',
+    #  'Source_File',
+    #  'directory',
+    #  'TI_start_date',
+    #  'days_since_TI',
+    #  'time_diff']
+
+#=================
+
+df_master_11.shape
+    # Out[25]: (16226, 16)
+
+# %%'
 
